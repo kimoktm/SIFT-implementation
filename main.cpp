@@ -29,7 +29,7 @@ double curvatureThreshold;
 double initialsigma;
 double sigma;
 
-void initilization() {
+void initialization() {
 	nOctaves = 4;
 	gImages = 5;
 	DOGImages = gImages - 1;
@@ -131,7 +131,7 @@ int main(int argc, char** argv) {
 	//normalize image and define octave numbers and guassian images to produce
 	normalize(image, image, 0, 1, NORM_MINMAX, CV_32F);
 
-	initilization();
+	initialization();
 
 	buildGaussianPyramid(image, pyr, nOctaves);
 
