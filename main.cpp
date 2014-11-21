@@ -19,6 +19,8 @@ using namespace cv;
 //keep track of all guassian images and DOGs
 vector<vector<Mat> > dogpyr;
 vector<vector<Mat> > pyr;
+vector<Mat> keypointsGradients;
+vector<Mat> keypointsMagnitudes;
 int nOctaves;
 int gImages;
 int DOGImages;
@@ -149,10 +151,51 @@ vector<double> computeOrientationHist(const Mat& image) {
 
 }
 
+//keypoint index and image
+
+
+void computeGradient(Mat image, int keyx, int keyy) {
+//ignore edges
+	if (keyx - 9 < 0 || keyx + 9 > image.cols || keyy - 9 < 0
+			|| keyy + 9 > image.rows) {
+		return;
+	} else {
+		Mat tempMagnitude = (Mat_<float>(16, 16));
+		Mat tempGradient = (Mat_<float>(16, 16));
+		for (int i = 0; i < 16; i++) {
+
+			for (int j = 0; j < 16; j++) {
+				float diffx, diffy, magnitude, gradient;
+
+				diffx = image.at<float>(keyx + i + 1 - 8, keyy - 8 + j)
+						- image.at<float>(keyx + i - 1 - 8, keyy - 8 + j);
+				diffy = image.at<float>(keyx - 8 + i, keyy + j + 1 - 8)
+						- image.at<float>(keyx - 8 + i, keyy + j - 1 - 8);
+				magnitude = sqrt(pow(diffx, 2) + pow(diffy, 2));
+				gradient = atan(diffy / diffx);
+
+				tempMagnitude.at<float>(i, j) = magnitude;
+				tempGradient.at<float>(i, j) = gradient;
+
+			}
+
+		}
+
+		keypointsGradients.push_back(tempGradient);
+		keypointsMagnitudes.push_back(tempMagnitude);
+	}
+
+}
+
 int main(int argc, char** argv) {
 
 	Mat image;
-	image = imread("../Test-Data/images/test.jpg", CV_LOAD_IMAGE_COLOR);
+	//karim linux
+	//image = imread("../Test-Data/images/test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
+	//jihad windows
+	image = imread("test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
+	//shawky apple
+	//image = imread("../Test-Data/images/test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
 
 	if (!image.data) {
 		cout << "Could not open or find the image" << std::endl;
@@ -160,7 +203,7 @@ int main(int argc, char** argv) {
 	}
 
 //normalize image and define octave numbers and guassian images to produce
-	cvtColor(image, image, CV_BGR2GRAY);
+	//cvtColor(image, image, CV_BGR2GRAY);
 	normalize(image, image, 0, 1, NORM_MINMAX, CV_32F);
 
 	initialization();
@@ -185,7 +228,7 @@ int main(int argc, char** argv) {
 	normalize(C, C, 0, 1, NORM_MINMAX, CV_32F);
 	normalize(E, E, 0, 1, NORM_MINMAX, CV_32F);
 	normalize(D, D, 0, 1, NORM_MINMAX, CV_32F);
-
+	computeGradient(image, 20, 20);
 	vector<vector<Mat> > pyr;
 	vector<Mat> intt;
 	intt.push_back(C);
