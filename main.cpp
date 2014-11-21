@@ -137,7 +137,7 @@ void maxInHistogram(vector<double> histogram, int &maximum, int &secondmax,
 	}
 
 }
-void histogramize(Mat sixteen, int range, int maximum) {
+int histogramize(Mat sixteen, int range, int maximum) {
 	int size = maximum / range;
 	vector<double> histo(size);
 	for (int i = 0; i < histo.size(); i++) {
@@ -154,16 +154,16 @@ void histogramize(Mat sixteen, int range, int maximum) {
 	maxInHistogram(histo, maxima, secondmax, indexMax, indexSecond);
 	int angleOrientation = indexMax * range;
 	angleOrientation = angleOrientation + (range / 2);
-	cout << secondmax << endl;
-	for (int i = 0; i < histo.size(); i++) {
-		//cout << histo[i] << endl;
-	}
+	return angleOrientation;
 
 }
 //keypoint index and image
 
-void computeGradient(Mat image, int keyx, int keyy) {
+void computeGradient(Mat image, KeyPoint feature) {
 //ignore edges
+
+	int keyx = feature.pt.x;
+	int keyy = feature.pt.y;
 
 	if (keyx - halfMargin - 1 < 0 || keyx + halfMargin + 1 > image.cols
 			|| keyy - halfMargin - 1 < 0
@@ -203,7 +203,7 @@ void computeGradient(Mat image, int keyx, int keyy) {
 
 		keypointsGradients.push_back(tempGradient);
 		keypointsMagnitudes.push_back(tempMagnitude);
-		histogramize(tempGradient, 10, 360);
+		feature.angle = histogramize(tempGradient, 10, 360);
 	}
 
 }
@@ -249,7 +249,8 @@ int main(int argc, char** argv) {
 	normalize(C, C, 0, 1, NORM_MINMAX, CV_32F);
 	normalize(E, E, 0, 1, NORM_MINMAX, CV_32F);
 	normalize(D, D, 0, 1, NORM_MINMAX, CV_32F);
-	computeGradient(image, 9, 9);
+	KeyPoint testing(9, 9, 0, 0, 0, 2);
+	computeGradient(image, testing);
 	vector<vector<Mat> > pyr;
 	vector<Mat> intt;
 	intt.push_back(C);
