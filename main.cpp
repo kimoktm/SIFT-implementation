@@ -2,7 +2,7 @@
  * main.cpp
  *
  *  Created on: Nov 18, 2014
- *      Author: Ahmed
+ *      Author: Ahmed, Karim, Mostafa
  */
 
 #include "opencv2/opencv.hpp"
@@ -29,6 +29,44 @@ double curvatureThreshold;
 double initialsigma;
 double sigma;
 
+bool isMaximum(vector<vector<Mat> >& dog_pyr, int octave, int interval, int x,
+		int y) {
+	float intensity = dog_pyr[octave][interval].at<float>(x, y);
+
+	for (int i = -1; i <= 1; i++)
+		for (int j = -1; j <= 1; j++)
+			for (int k = -1; k <= 1; k++)
+				if (intensity
+						< dog_pyr[octave][interval + i].at<float>(x + j, y + k))
+					return false;
+	return true;
+}
+
+bool isMinimum(vector<vector<Mat> >& dog_pyr, int octave, int interval, int x,
+		int y) {
+	float intensity = dog_pyr[octave][interval].at<float>(x, y);
+
+	for (int i = -1; i <= 1; i++)
+		for (int j = -1; j <= 1; j++)
+			for (int k = -1; k <= 1; k++)
+				if (intensity
+						> dog_pyr[octave][interval + i].at<float>(x + j, y + k))
+					return false;
+	return true;
+}
+
+bool isExtrema(vector<vector<Mat> >& dog_pyr, int octave, int interval, int x,
+		int y) {
+
+	return isMaximum(dog_pyr, octave, interval, x, y)
+			|| isMinimum(dog_pyr, octave, interval, x, y);
+}
+
+void getScaleSpaceExtrema(vector<vector<Mat> >& dog_pyr,
+		vector<KeyPoint>& keypoints) {
+
+}
+
 void initialization() {
 	nOctaves = 4;
 	gImages = 5;
@@ -40,17 +78,17 @@ void initialization() {
 }
 
 Mat downSample(Mat& image) {
-	//down sample the image half the size for the next octave
+//down sample the image half the size for the next octave
 
 	Mat gauss;
 	GaussianBlur(image, gauss, Size(0, 0), sqrt(2) / 2, 0);
 
-	//Downsample columns and save it to temp
+//Downsample columns and save it to temp
 	Mat temp = Mat(Size(gauss.cols / 2, gauss.rows), image.type());
 	for (int i = 0; i < temp.cols; i++)
 		gauss.col(i * 2).copyTo(temp.col(i));
 
-	//Downsample rows and return it
+//Downsample rows and return it
 	Mat dest = Mat(Size(temp.cols, temp.rows / 2), image.type());
 	for (int i = 0; i < dest.rows; i++)
 		temp.row(i * 2).copyTo(dest.row(i));
@@ -80,11 +118,9 @@ void buildGaussianPyramid(Mat& image, vector<vector<Mat> >& pyr, int nOctaves) {
 		pyr.push_back(allGuassians);
 		image = downSample(image);
 	}
-
 }
 
 vector<vector<Mat> > buildDogPyr(vector<vector<Mat> > gauss_pyr) {
-
 	vector<vector<Mat> > dogpyramid;
 	for (int i = 0; i < nOctaves; i++) {
 		//gets DOG across guassian images
@@ -113,22 +149,18 @@ vector<double> computeOrientationHist(const Mat& image) {
 
 }
 
-void getScaleSpaceExtrema(vector<vector<Mat> > & dog_pyr,
-		vector<KeyPoint>& keypoints) {
-
-}
-
 int main(int argc, char** argv) {
 
 	Mat image;
-	image = imread("test.jpg", CV_LOAD_IMAGE_COLOR);
+	image = imread("../Test-Data/images/test.jpg", CV_LOAD_IMAGE_COLOR);
 
 	if (!image.data) {
 		cout << "Could not open or find the image" << std::endl;
 		return -1;
 	}
 
-	//normalize image and define octave numbers and guassian images to produce
+//normalize image and define octave numbers and guassian images to produce
+	cvtColor(image, image, CV_BGR2GRAY);
 	normalize(image, image, 0, 1, NORM_MINMAX, CV_32F);
 
 	initialization();
@@ -137,16 +169,39 @@ int main(int argc, char** argv) {
 
 	dogpyr = buildDogPyr(pyr);
 
-	//////////////////////////////////////////////////////////////////////////
-	//testing output
-	int count = 0;
-	for (int i = 0; i < dogpyr.size(); i++) {
-		for (int y = 0; y < dogpyr[i].size(); y++) {
-			count++;
-			imshow("et3'adena eh enahrda ya shabab" + (count), dogpyr[i][y]);
-		}
-	}
-	//////////////////////////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////////////////////
+//testing output
+//	int count = 0;
+//	for (int i = 0; i < dogpyr.size(); i++) {
+//		for (int y = 0; y < dogpyr[i].size(); y++) {
+//			count++;
+//			imshow("et3'adena eh enahrda ya shabab" + (count), dogpyr[i][y]);
+//		}
+//	}
+//////////////////////////////////////////////////////////////////////////
+	Mat C = (Mat_<double>(3, 3) << 0, 1, 0, 1, 5, -1, 0, -1, 0);
+	Mat D = (Mat_<double>(3, 3) << 0, 1, 0, 1, 0, 1, 0, 1, 0);
+	Mat E = (Mat_<double>(3, 3) << 13, 20, 52, 34, 77, 89, 54, 20, 46);
+	normalize(C, C, 0, 1, NORM_MINMAX, CV_32F);
+	normalize(E, E, 0, 1, NORM_MINMAX, CV_32F);
+	normalize(D, D, 0, 1, NORM_MINMAX, CV_32F);
+
+	vector<vector<Mat> > pyr;
+	vector<Mat> intt;
+	intt.push_back(C);
+	intt.push_back(D);
+	intt.push_back(E);
+	pyr.push_back(intt);
+
+	cout << C << endl;
+	cout << "=======================================" << endl;
+	cout << D << endl;
+	cout << "=======================================" << endl;
+	cout << E << endl;
+	cout << "=======================================" << endl;
+
+	bool ext = isMinimum(pyr, 0, 1, 1, 1);
+	cout << ext << endl;
 
 	waitKey(0);
 	return 0;
