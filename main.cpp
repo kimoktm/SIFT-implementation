@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <iostream>
 #include <fstream>
+# define pi           3.14159265358979323846  /* pi */
 
 using namespace std;
 using namespace cv;
@@ -155,6 +156,48 @@ vector<double> computeOrientationHist(const Mat& image) {
 
 }
 
+void maxInHistogram(vector<double> histogram, int &maximum, int &secondmax,
+		int &indexMax, int &indexSecond) {
+
+	maximum = histogram[0];
+	secondmax = histogram[0];
+	indexMax = 0;
+	indexSecond = 0;
+
+	for (int i = 0; i < histogram.size(); i++) {
+		if (maximum < histogram[i]) {
+			secondmax = maximum;
+			indexSecond = indexMax;
+
+			maximum = histogram[i];
+			indexMax = i;
+		}
+	}
+
+}
+void histogramize(Mat sixteen, int range, int maximum) {
+	int size = maximum / range;
+	vector<double> histo(size);
+	for (int i = 0; i < histo.size(); i++) {
+		histo[i] = 0;
+	}
+	for (int i = 0; i < sixteen.rows; i++) {
+		for (int j = 0; j < sixteen.cols; j++) {
+			int index = sixteen.at<float>(i, j) / range;
+			histo[index - 1]++;
+
+		}
+	}
+	int maxima, secondmax, indexMax, indexSecond;
+	maxInHistogram(histo, maxima, secondmax, indexMax, indexSecond);
+	int angleOrientation = indexMax * range;
+	angleOrientation = angleOrientation + (range / 2);
+	cout << secondmax << endl;
+	for (int i = 0; i < histo.size(); i++) {
+		//cout << histo[i] << endl;
+	}
+
+}
 //keypoint index and image
 
 void computeGradient(Mat image, int keyx, int keyy) {
@@ -182,7 +225,13 @@ void computeGradient(Mat image, int keyx, int keyy) {
 						- image.at<float>(keyx - halfMargin + i,
 								keyy + j - 1 - halfMargin);
 				magnitude = sqrt(pow(diffx, 2) + pow(diffy, 2));
-				gradient = atan(diffy / diffx);
+				gradient = atan2f(diffy, diffx);
+
+				if (gradient < 0) {
+					gradient += (2 * pi);
+				}
+				gradient *= 360 / (2 * pi);
+
 				tempMagnitude.at<float>(i, j) = magnitude;
 				tempGradient.at<float>(i, j) = gradient;
 
@@ -192,6 +241,7 @@ void computeGradient(Mat image, int keyx, int keyy) {
 
 		keypointsGradients.push_back(tempGradient);
 		keypointsMagnitudes.push_back(tempMagnitude);
+		histogramize(tempGradient, 10, 360);
 	}
 
 }
@@ -199,12 +249,12 @@ void computeGradient(Mat image, int keyx, int keyy) {
 int main(int argc, char** argv) {
 
 	Mat image;
-	//karim linux
-	//image = imread("../Test-Data/images/test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
-	//jihad windows
+//karim linux
+//image = imread("../Test-Data/images/test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
+//jihad windows
 	image = imread("test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
-	//shawky apple
-	//image = imread("../Test-Data/images/test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
+//shawky apple
+//image = imread("../Test-Data/images/test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
 
 	if (!image.data) {
 		cout << "Could not open or find the image" << std::endl;
@@ -212,7 +262,7 @@ int main(int argc, char** argv) {
 	}
 
 //normalize image and define octave numbers and guassian images to produce
-	//cvtColor(image, image, CV_BGR2GRAY);
+//cvtColor(image, image, CV_BGR2GRAY);
 	normalize(image, image, 0, 1, NORM_MINMAX, CV_32F);
 
 	initialization();
