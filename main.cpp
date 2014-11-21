@@ -21,6 +21,7 @@ using namespace cv;
 vector<vector<Mat> > dogpyr;
 vector<vector<Mat> > pyr;
 vector<Mat> keypointsGradients;
+vector<vector<double> > descriptorAllFeatures;
 vector<Mat> keypointsMagnitudes;
 int nOctaves;
 int gImages;
@@ -137,73 +138,113 @@ void maxInHistogram(vector<double> histogram, int &maximum, int &secondmax,
 	}
 
 }
-int histogramize(Mat sixteen, int range, int maximum) {
+
+vector<double> histogramize(Mat matrix, int range, int maximum) {
 	int size = maximum / range;
 	vector<double> histo(size);
 	for (int i = 0; i < histo.size(); i++) {
 		histo[i] = 0;
 	}
-	for (int i = 0; i < sixteen.rows; i++) {
-		for (int j = 0; j < sixteen.cols; j++) {
-			int index = sixteen.at<float>(i, j) / range;
-			histo[index - 1]++;
-
+	for (int i = 0; i < matrix.rows; i++) {
+		for (int j = 0; j < matrix.cols; j++) {
+			int index = matrix.at<float>(i, j) / range;
+			histo[index]++;
 		}
 	}
-	int maxima, secondmax, indexMax, indexSecond;
-	maxInHistogram(histo, maxima, secondmax, indexMax, indexSecond);
-	int angleOrientation = indexMax * range;
-	angleOrientation = angleOrientation + (range / 2);
-	return angleOrientation;
+	return histo;
 
 }
 //keypoint index and image
 
-void computeGradient(Mat image, KeyPoint feature) {
-//ignore edges
+void computeDescriptors() {
+	for (int points = 0; points < keypointsGradients.size(); points++) {
+		Mat temp = keypointsGradients[points];
+		vector<double> singleDescriptor;
+		singleDescriptor.reserve(128);
+		for (int xBlock = 0; xBlock < temp.cols; xBlock += 4) {
 
-	int keyx = feature.pt.x;
-	int keyy = feature.pt.y;
+			for (int yBlock = 0; yBlock < 16; yBlock += 4) {
+				Mat blockMatrix = Mat::zeros(4, 4, CV_32F);
+				for (int i = 0; i < 4; i++) {
+					for (int j = 0; j < 4; j++) {
+						blockMatrix.at<float>(i, j) = temp.at<float>(xBlock + i,
+								yBlock + j);
 
-	if (keyx - halfMargin - 1 < 0 || keyx + halfMargin + 1 > image.cols
-			|| keyy - halfMargin - 1 < 0
-			|| keyy + halfMargin + 1 > image.rows) {
-		return;
-	} else {
-
-		Mat tempMagnitude = (Mat_<float>(histogramMargin, histogramMargin));
-		Mat tempGradient = (Mat_<float>(histogramMargin, histogramMargin));
-		for (int i = 0; i < histogramMargin; i++) {
-
-			for (int j = 0; j < histogramMargin; j++) {
-				float diffx, diffy, magnitude, gradient;
-
-				diffx = image.at<float>(keyx + i + 1 - halfMargin,
-						keyy - halfMargin + j)
-						- image.at<float>(keyx + i - 1 - halfMargin,
-								keyy - halfMargin + j);
-				diffy = image.at<float>(keyx - halfMargin + i,
-						keyy + j + 1 - halfMargin)
-						- image.at<float>(keyx - halfMargin + i,
-								keyy + j - 1 - halfMargin);
-				magnitude = sqrt(pow(diffx, 2) + pow(diffy, 2));
-				gradient = atan2f(diffy, diffx);
-
-				if (gradient < 0) {
-					gradient += (2 * pi);
+					}
 				}
-				gradient *= 360 / (2 * pi);
+				vector<double> singleHistogram = histogramize(blockMatrix, 45,
+						360);
+				singleDescriptor.insert(singleDescriptor.end(),
+						singleHistogram.begin(), singleHistogram.end());
 
-				tempMagnitude.at<float>(i, j) = magnitude;
-				tempGradient.at<float>(i, j) = gradient;
+			}
+		}
+
+		descriptorAllFeatures.push_back(singleDescriptor);
+
+	}
+
+}
+
+void computeGradient(Mat image, vector<KeyPoint> features) {
+//ignore edges
+	int range = 10;
+	int maximum = 360;
+
+	for (int z = 0; z < features.size(); z++) {
+
+		int keyx = features[z].pt.x;
+		int keyy = features[z].pt.y;
+
+		if (keyx - halfMargin - 1 < 0 || keyx + halfMargin + 1 > image.cols
+				|| keyy - halfMargin - 1 < 0
+				|| keyy + halfMargin + 1 > image.rows) {
+			return;
+		} else {
+
+			Mat tempMagnitude = (Mat_<float>(histogramMargin, histogramMargin));
+			Mat tempGradient = (Mat_<float>(histogramMargin, histogramMargin));
+			for (int i = 0; i < histogramMargin; i++) {
+
+				for (int j = 0; j < histogramMargin; j++) {
+					float diffx, diffy, magnitude, gradient;
+
+					diffx = image.at<float>(keyx + i + 1 - halfMargin,
+							keyy - halfMargin + j)
+							- image.at<float>(keyx + i - 1 - halfMargin,
+									keyy - halfMargin + j);
+					diffy = image.at<float>(keyx - halfMargin + i,
+							keyy + j + 1 - halfMargin)
+							- image.at<float>(keyx - halfMargin + i,
+									keyy + j - 1 - halfMargin);
+					magnitude = sqrt(pow(diffx, 2) + pow(diffy, 2));
+					gradient = atan2f(diffy, diffx);
+
+					if (gradient < 0) {
+						gradient += (2 * pi);
+					}
+					gradient *= 360 / (2 * pi);
+
+					tempMagnitude.at<float>(i, j) = magnitude;
+					tempGradient.at<float>(i, j) = gradient;
+
+				}
 
 			}
 
-		}
+			keypointsGradients.push_back(tempGradient);
+			keypointsMagnitudes.push_back(tempMagnitude);
 
-		keypointsGradients.push_back(tempGradient);
-		keypointsMagnitudes.push_back(tempMagnitude);
-		feature.angle = histogramize(tempGradient, 10, 360);
+			int maxima, secondmax, indexMax, indexSecond;
+
+			vector<double> histo = histogramize(tempGradient, range, maximum);
+
+			maxInHistogram(histo, maxima, secondmax, indexMax, indexSecond);
+
+			int angleOrientation = indexMax * range;
+			angleOrientation = angleOrientation + (range / 2);
+			features[z].angle = angleOrientation;
+		}
 	}
 
 }
@@ -250,7 +291,10 @@ int main(int argc, char** argv) {
 	normalize(E, E, 0, 1, NORM_MINMAX, CV_32F);
 	normalize(D, D, 0, 1, NORM_MINMAX, CV_32F);
 	KeyPoint testing(9, 9, 0, 0, 0, 2);
-	computeGradient(image, testing);
+	vector<KeyPoint> booya;
+	booya.push_back(testing);
+	computeGradient(image, booya);
+	computeDescriptors();
 	vector<vector<Mat> > pyr;
 	vector<Mat> intt;
 	intt.push_back(C);
@@ -258,12 +302,12 @@ int main(int argc, char** argv) {
 	intt.push_back(E);
 	pyr.push_back(intt);
 
-	cout << C << endl;
-	cout << "=======================================" << endl;
-	cout << D << endl;
-	cout << "=======================================" << endl;
-	cout << E << endl;
-	cout << "=======================================" << endl;
+	//cout << C << endl;
+	//cout << "=======================================" << endl;
+	//cout << D << endl;
+	//cout << "=======================================" << endl;
+	//cout << E << endl;
+	//cout << "=======================================" << endl;
 
 	waitKey(0);
 	return 0;
