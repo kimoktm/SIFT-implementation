@@ -19,8 +19,12 @@ using namespace cv;
 //keep track of all guassian images and DOGs
 vector<vector<Mat> > dogpyr;
 vector<vector<Mat> > pyr;
+vector<Mat> keypointsGradients;
+vector<Mat> keypointsMagnitudes;
 int nOctaves;
 int gImages;
+int histogramMargin;
+int halfMargin;
 int DOGImages;
 //define thresholds
 double contrastThreshold;
@@ -32,6 +36,8 @@ double sigma;
 void initialization() {
 	nOctaves = 4;
 	gImages = 5;
+	histogramMargin = 16;
+	halfMargin = histogramMargin / 2;
 	DOGImages = gImages - 1;
 	contrastThreshold = 0.03;
 	curvatureThreshold = 10.0;
@@ -111,10 +117,56 @@ vector<double> computeOrientationHist(const Mat& image) {
 
 }
 
+//keypoint index and image
+
+void computeGradient(Mat image, int keyx, int keyy) {
+//ignore edges
+
+	if (keyx - halfMargin - 1 < 0 || keyx + halfMargin + 1 > image.cols
+			|| keyy - halfMargin - 1 < 0
+			|| keyy + halfMargin + 1 > image.rows) {
+		return;
+	} else {
+
+		Mat tempMagnitude = (Mat_<float>(histogramMargin, histogramMargin));
+		Mat tempGradient = (Mat_<float>(histogramMargin, histogramMargin));
+		for (int i = 0; i < histogramMargin; i++) {
+
+			for (int j = 0; j < histogramMargin; j++) {
+				float diffx, diffy, magnitude, gradient;
+
+				diffx = image.at<float>(keyx + i + 1 - halfMargin,
+						keyy - halfMargin + j)
+						- image.at<float>(keyx + i - 1 - halfMargin,
+								keyy - halfMargin + j);
+				diffy = image.at<float>(keyx - halfMargin + i,
+						keyy + j + 1 - halfMargin)
+						- image.at<float>(keyx - halfMargin + i,
+								keyy + j - 1 - halfMargin);
+				magnitude = sqrt(pow(diffx, 2) + pow(diffy, 2));
+				gradient = atan(diffy / diffx);
+				tempMagnitude.at<float>(i, j) = magnitude;
+				tempGradient.at<float>(i, j) = gradient;
+
+			}
+
+		}
+
+		keypointsGradients.push_back(tempGradient);
+		keypointsMagnitudes.push_back(tempMagnitude);
+	}
+
+}
+
 int main(int argc, char** argv) {
 
 	Mat image;
-	image = imread("../Test-Data/images/test.jpg", CV_LOAD_IMAGE_COLOR);
+	//karim linux
+	//image = imread("../Test-Data/images/test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
+	//jihad windows
+	image = imread("test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
+	//shawky apple
+	//image = imread("../Test-Data/images/test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
 
 	if (!image.data) {
 		cout << "Could not open or find the image" << std::endl;
@@ -122,7 +174,7 @@ int main(int argc, char** argv) {
 	}
 
 //normalize image and define octave numbers and guassian images to produce
-	cvtColor(image, image, CV_BGR2GRAY);
+	//cvtColor(image, image, CV_BGR2GRAY);
 	normalize(image, image, 0, 1, NORM_MINMAX, CV_32F);
 
 	initialization();
@@ -147,7 +199,7 @@ int main(int argc, char** argv) {
 	normalize(C, C, 0, 1, NORM_MINMAX, CV_32F);
 	normalize(E, E, 0, 1, NORM_MINMAX, CV_32F);
 	normalize(D, D, 0, 1, NORM_MINMAX, CV_32F);
-
+	computeGradient(image, 9, 9);
 	vector<vector<Mat> > pyr;
 	vector<Mat> intt;
 	intt.push_back(C);
