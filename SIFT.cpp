@@ -33,6 +33,7 @@ double contrastThreshold;
 //define starting sigma for guassian
 double initialsigma;
 double sigma;
+vector<vector<double> > descriptorAllFeatures;
 
 /************************************/
 void initialization() {
@@ -202,6 +203,34 @@ void computeGradient(vector<vector<Mat> >& dog_pyr,
 
 }
 
+void computeDescriptors() {
+	for (int points = 0; points < keypointsGradients.size(); points++) {
+		Mat temp = keypointsGradients[points];
+		vector<double> singleDescriptor;
+		singleDescriptor.reserve(128);
+		for (int xBlock = 0; xBlock < temp.cols; xBlock += 4) {
+
+			for (int yBlock = 0; yBlock < 16; yBlock += 4) {
+				Mat blockMatrix = Mat::zeros(4, 4, CV_32F);
+				for (int i = 0; i < 4; i++) {
+					for (int j = 0; j < 4; j++) {
+						blockMatrix.at<float>(i, j) = temp.at<float>(xBlock + i,
+								yBlock + j);
+
+					}
+				}
+				vector<double> singleHistogram = histogramize(blockMatrix, 45,
+						360);
+				singleDescriptor.insert(singleDescriptor.end(),
+						singleHistogram.begin(), singleHistogram.end());
+
+			}
+		}
+		descriptorAllFeatures.push_back(singleDescriptor);
+
+	}
+}
+
 /**
  * Parse a given input into a mathematical expression or define a new
  * variable or assign value to a variable
@@ -329,9 +358,9 @@ void drawKeyPoints(vector<KeyPoint>& keypoints, Mat& image) {
 						* pow(2, keypoints[i].octave);
 		pt2.y = pt1.y
 				+ sin(keypoints[i].angle * PI / 180.0f)
-						* pow(2, keypoints[i].octave) * 15;
-//		line(image, pt1 * pow(2, keypoints[i].octave),
-//				pt2 * pow(2, keypoints[i].octave), Scalar(150, 0, 0), 2);
+						* pow(2, keypoints[i].octave);
+		line(image, pt1 * pow(2, keypoints[i].octave),
+				pt2 * pow(2, keypoints[i].octave), Scalar(150, 0, 0), 2);
 		circle(image, pt1 * pow(2, keypoints[i].octave), 3, colors[2], -1);
 
 //		circle(image, pt2, 1, Scalar(255, 255, 255));
@@ -366,9 +395,11 @@ int main(int argc, char** argv) {
 	getScaleSpaceExtrema(dogpyr, keypoints);
 	computeGradient(dogpyr, keypoints);
 	cout << "SIZE: " << keypoints.size() << endl;
-
+	computeDescriptors();
+	cout << descriptorAllFeatures.size() << endl;
 	drawKeyPoints(keypoints, imageColor);
 
+	// OPENCV SIFT //
 	SiftFeatureDetector detector;
 	vector<cv::KeyPoint> siftkeypoints;
 	detector.detect(image2, siftkeypoints);
