@@ -12,6 +12,7 @@
 //#include <stdio.h>
 //#include <iostream>
 //#include <fstream>
+//# define pi           3.14159265358979323846  /* pi */
 //
 //using namespace std;
 //using namespace cv;
@@ -20,6 +21,7 @@
 //vector<vector<Mat> > dogpyr;
 //vector<vector<Mat> > pyr;
 //vector<Mat> keypointsGradients;
+//vector<vector<double> > descriptorAllFeatures;
 //vector<Mat> keypointsMagnitudes;
 //int nOctaves;
 //int gImages;
@@ -117,60 +119,145 @@
 //
 //}
 //
-////keypoint index and image
+//void maxInHistogram(vector<double> histogram, int &maximum, int &secondmax,
+//		int &indexMax, int &indexSecond) {
 //
-//void computeGradient(Mat image, int keyx, int keyy) {
-////ignore edges
+//	maximum = histogram[0];
+//	secondmax = histogram[0];
+//	indexMax = 0;
+//	indexSecond = 0;
 //
-//	if (keyx - halfMargin - 1 < 0 || keyx + halfMargin + 1 > image.cols
-//			|| keyy - halfMargin - 1 < 0
-//			|| keyy + halfMargin + 1 > image.rows) {
-//		return;
-//	} else {
+//	for (int i = 0; i < histogram.size(); i++) {
+//		if (maximum < histogram[i]) {
+//			secondmax = maximum;
+//			indexSecond = indexMax;
 //
-//		Mat tempMagnitude = (Mat_<float>(histogramMargin, histogramMargin));
-//		Mat tempGradient = (Mat_<float>(histogramMargin, histogramMargin));
-//		for (int i = 0; i < histogramMargin; i++) {
-//
-//			for (int j = 0; j < histogramMargin; j++) {
-//				float diffx, diffy, magnitude, gradient;
-//
-//				diffx = image.at<float>(keyx + i + 1 - halfMargin,
-//						keyy - halfMargin + j)
-//						- image.at<float>(keyx + i - 1 - halfMargin,
-//								keyy - halfMargin + j);
-//				diffy = image.at<float>(keyx - halfMargin + i,
-//						keyy + j + 1 - halfMargin)
-//						- image.at<float>(keyx - halfMargin + i,
-//								keyy + j - 1 - halfMargin);
-//				magnitude = sqrt(pow(diffx, 2) + pow(diffy, 2));
-//				gradient = atan(diffy / diffx);
-//				tempMagnitude.at<float>(i, j) = magnitude;
-//				tempGradient.at<float>(i, j) = gradient;
-//
-//			}
-//
+//			maximum = histogram[i];
+//			indexMax = i;
 //		}
-//
-//		keypointsGradients.push_back(tempGradient);
-//		keypointsMagnitudes.push_back(tempMagnitude);
 //	}
 //
 //}
 //
-//Mat normalized(Mat input) {
+//vector<double> histogramize(Mat matrix, int range, int maximum) {
+//	int size = maximum / range;
+//	vector<double> histo(size);
+//	for (int i = 0; i < histo.size(); i++) {
+//		histo[i] = 0;
+//	}
+//	for (int i = 0; i < matrix.rows; i++) {
+//		for (int j = 0; j < matrix.cols; j++) {
+//			int index = matrix.at<float>(i, j) / range;
+//			histo[index]++;
+//		}
+//	}
+//	return histo;
+//
+//}
+////keypoint index and image
+//
+//void computeDescriptors() {
+//	for (int points = 0; points < keypointsGradients.size(); points++) {
+//		Mat temp = keypointsGradients[points];
+//		vector<double> singleDescriptor;
+//		singleDescriptor.reserve(128);
+//		for (int xBlock = 0; xBlock < temp.cols; xBlock += 4) {
+//
+//			for (int yBlock = 0; yBlock < 16; yBlock += 4) {
+//				Mat blockMatrix = Mat::zeros(4, 4, CV_32F);
+//				for (int i = 0; i < 4; i++) {
+//					for (int j = 0; j < 4; j++) {
+//						blockMatrix.at<float>(i, j) = temp.at<float>(xBlock + i,
+//								yBlock + j);
+//
+//					}
+//				}
+//				vector<double> singleHistogram = histogramize(blockMatrix, 45,
+//						360);
+//				singleDescriptor.insert(singleDescriptor.end(),
+//						singleHistogram.begin(), singleHistogram.end());
+//
+//			}
+//		}
+//
+//		descriptorAllFeatures.push_back(singleDescriptor);
+//
+//	}
+//
+//}
+//
+//void computeGradient(Mat image, vector<KeyPoint> features) {
+////ignore edges
+//	int range = 10;
+//	int maximum = 360;
+//
+//	for (int z = 0; z < features.size(); z++) {
+//
+//		int keyx = features[z].pt.x;
+//		int keyy = features[z].pt.y;
+//
+//		if (keyx - halfMargin - 1 < 0 || keyx + halfMargin + 1 > image.cols
+//				|| keyy - halfMargin - 1 < 0
+//				|| keyy + halfMargin + 1 > image.rows) {
+//			return;
+//		} else {
+//
+//			Mat tempMagnitude = (Mat_<float>(histogramMargin, histogramMargin));
+//			Mat tempGradient = (Mat_<float>(histogramMargin, histogramMargin));
+//			for (int i = 0; i < histogramMargin; i++) {
+//
+//				for (int j = 0; j < histogramMargin; j++) {
+//					float diffx, diffy, magnitude, gradient;
+//
+//					diffx = image.at<float>(keyx + i + 1 - halfMargin,
+//							keyy - halfMargin + j)
+//							- image.at<float>(keyx + i - 1 - halfMargin,
+//									keyy - halfMargin + j);
+//					diffy = image.at<float>(keyx - halfMargin + i,
+//							keyy + j + 1 - halfMargin)
+//							- image.at<float>(keyx - halfMargin + i,
+//									keyy + j - 1 - halfMargin);
+//					magnitude = sqrt(pow(diffx, 2) + pow(diffy, 2));
+//					gradient = atan2f(diffy, diffx);
+//
+//					if (gradient < 0) {
+//						gradient += (2 * pi);
+//					}
+//					gradient *= 360 / (2 * pi);
+//
+//					tempMagnitude.at<float>(i, j) = magnitude;
+//					tempGradient.at<float>(i, j) = gradient;
+//
+//				}
+//
+//			}
+//
+//			keypointsGradients.push_back(tempGradient);
+//			keypointsMagnitudes.push_back(tempMagnitude);
+//
+//			int maxima, secondmax, indexMax, indexSecond;
+//
+//			vector<double> histo = histogramize(tempGradient, range, maximum);
+//
+//			maxInHistogram(histo, maxima, secondmax, indexMax, indexSecond);
+//
+//			int angleOrientation = indexMax * range;
+//			angleOrientation = angleOrientation + (range / 2);
+//			features[z].angle = angleOrientation;
+//		}
+//	}
 //
 //}
 //
 //int main(int argc, char** argv) {
 //
 //	Mat image;
-//	//karim linux
-//	image = imread("../Test-Data/images/test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
-//	//jihad windows
-////	image = imread("test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
-//	//shawky apple
-//	//image = imread("../Test-Data/images/test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
+////karim linux
+////image = imread("../Test-Data/images/test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
+////jihad windows
+//	image = imread("test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
+////shawky apple
+////image = imread("../Test-Data/images/test.jpg", CV_LOAD_IMAGE_GRAYSCALE);
 //
 //	if (!image.data) {
 //		cout << "Could not open or find the image" << std::endl;
@@ -178,7 +265,7 @@
 //	}
 //
 ////normalize image and define octave numbers and guassian images to produce
-//	//cvtColor(image, image, CV_BGR2GRAY);
+////cvtColor(image, image, CV_BGR2GRAY);
 //	normalize(image, image, 0, 1, NORM_MINMAX, CV_32F);
 //
 //	initialization();
@@ -189,13 +276,13 @@
 //
 ////////////////////////////////////////////////////////////////////////////
 ////testing output
-////	int count = 0;
-////	for (int i = 0; i < dogpyr.size(); i++) {
-////		for (int y = 0; y < dogpyr[i].size(); y++) {
-////			count++;
-////			imshow("et3'adena eh enahrda ya shabab" + (count), dogpyr[i][y]);
-////		}
-////	}
+////  int count = 0;
+////  for (int i = 0; i < dogpyr.size(); i++) {
+////      for (int y = 0; y < dogpyr[i].size(); y++) {
+////          count++;
+////          imshow("et3'adena eh enahrda ya shabab" + (count), dogpyr[i][y]);
+////      }
+////  }
 ////////////////////////////////////////////////////////////////////////////
 //	Mat C = (Mat_<double>(3, 3) << 0, 1, 0, 1, 5, -1, 0, -1, 0);
 //	Mat D = (Mat_<double>(3, 3) << 0, 1, 0, 1, 0, 1, 0, 1, 0);
@@ -203,7 +290,11 @@
 //	normalize(C, C, 0, 1, NORM_MINMAX, CV_32F);
 //	normalize(E, E, 0, 1, NORM_MINMAX, CV_32F);
 //	normalize(D, D, 0, 1, NORM_MINMAX, CV_32F);
-//	computeGradient(image, 9, 9);
+//	KeyPoint testing(9, 9, 0, 0, 0, 2);
+//	vector<KeyPoint> booya;
+//	booya.push_back(testing);
+//	computeGradient(image, booya);
+//	computeDescriptors();
 //	vector<vector<Mat> > pyr;
 //	vector<Mat> intt;
 //	intt.push_back(C);
@@ -211,27 +302,12 @@
 //	intt.push_back(E);
 //	pyr.push_back(intt);
 //
-////	C.at<float>(1, 1) = C.at<float>(0, 1);
-//	cout << C << endl;
-//	cout << "=======================================" << endl;
-////	cout << D << endl;
-////	cout << "=======================================" << endl;
-////	cout << E << endl;
-////	cout << "=======================================" << endl;
-//
-//	float val = C.at<float>(1, 1);
-////	cout << "VASLE: " << val << endl;
-//
-////	for (int i = -1; i <= 1; i++)
-//	for (int j = -1; j <= 1; j++)
-//		for (int k = -1; k <= 1; k++)
-////			if (j + 1 != 1 || k + 1 != 1)
-//			if (val <= C.at<float>(j + 1, k + 1) && (j != 0 || k != 0))
-//				cout << "Not Max: " << C.at<float>(j + 1, k + 1) << endl;
-//
-//	cout << "MAX" << endl;
-////	cout << "%.2d" << val;
-////	printf(val);
+//	//cout << C << endl;
+//	//cout << "=======================================" << endl;
+//	//cout << D << endl;
+//	//cout << "=======================================" << endl;
+//	//cout << E << endl;
+//	//cout << "=======================================" << endl;
 //
 //	waitKey(0);
 //	return 0;

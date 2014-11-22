@@ -1,5 +1,7 @@
 #include "opencv2/opencv.hpp"
 #include "opencv2/highgui/highgui.hpp"
+#include "opencv2/features2d/features2d.hpp"
+#include "opencv2/nonfree/nonfree.hpp"
 
 #include <math.h>
 #include <stdio.h>
@@ -10,7 +12,7 @@ using namespace std;
 using namespace cv;
 
 /* width of border in which to ignore keypoints */
-#define SIFT_IMG_BORDER 			5
+#define SIFT_IMG_BORDER 			10
 #define CONTRAST_THRESHOLD			0.03
 #define R_CURVATURE             	10.0
 #define PI							3.14159265358979323846
@@ -39,8 +41,6 @@ void initialization() {
 	histogramMargin = 16;
 	halfMargin = histogramMargin / 2;
 	DOGImages = gImages - 1;
-	contrastThreshold = 0.03;
-//	curvatureThreshold = 10.0;
 	initialsigma = sqrt(2);
 	sigma = initialsigma;
 }
@@ -49,8 +49,8 @@ Mat downSample(Mat& image) {
 //down sample the image half the size for the next octave
 
 	Mat gauss;
-	image.copyTo(gauss);
-//	GaussianBlur(image, gauss, Size(0, 0), sqrt(2) / 2, 0);
+//	image.copyTo(gauss);
+	GaussianBlur(image, gauss, Size(0, 0), sqrt(2) / 2, 0);
 
 //Downsample columns and save it to temp
 	Mat temp = Mat(Size(gauss.cols / 2, gauss.rows), image.type());
@@ -72,16 +72,16 @@ void buildGaussianPyramid(Mat image, vector<vector<Mat> >& pyr, int nOctaves) {
 		vector<Mat> allGuassians;
 		//applies guassian filter on image
 		for (int j = 0; j < gImages; j++) {
-			if (j == 0) {
-				//leaves the 1st image without blur and pushes in global vector
-				allGuassians.push_back(image);
-			} else {
-				Mat blurredImage;
-				GaussianBlur(image, blurredImage, Size(0, 0), sigma, 0);
-				allGuassians.push_back(blurredImage);
-				//increases blur
-				sigma *= sqrt(2) * 2;
-			}
+//			if (j == 0) {
+//				//leaves the 1st image without blur and pushes in global vector
+//				allGuassians.push_back(image);
+//			} else {
+			Mat blurredImage;
+			GaussianBlur(image, blurredImage, Size(0, 0), sigma, 0);
+			allGuassians.push_back(blurredImage);
+			//increases blur
+			sigma *= sqrt(2);
+//			}
 		}
 		pyr.push_back(allGuassians);
 		image = downSample(image);
@@ -106,47 +106,100 @@ vector<vector<Mat> > buildDogPyr(vector<vector<Mat> > gauss_pyr) {
 
 /************************************/
 
-/**
- * Detrimes if a pixel is maximum in
- *
- * @param expression
- *            the string to check
- * @return result of the induced calculation
- */
-bool isMaximum(vector<vector<Mat> >& dog_pyr, int octave, int interval, int r,
-		int c) {
-	float intensity = dog_pyr[octave][interval].at<float>(r, c);
+void maxInHistogram(vector<double> histogram, int &maximum, int &secondmax,
+		int &indexMax, int &indexSecond) {
 
-	for (int i = -1; i <= 1; i++)
-		for (int j = -1; j <= 1; j++)
-			for (int k = -1; k <= 1; k++)
-				if (intensity
-						<= dog_pyr[octave][interval + i].at<float>(r + j, c + k)
-						&& (j != 0 || k != 0))
-					return false;
-	return true;
+	maximum = histogram[0];
+	secondmax = histogram[0];
+	indexMax = 0;
+	indexSecond = 0;
+
+	for (int i = 0; i < histogram.size(); i++) {
+		if (maximum < histogram[i]) {
+			secondmax = maximum;
+			indexSecond = indexMax;
+
+			maximum = histogram[i];
+			indexMax = i;
+		}
+	}
 }
 
-/**
- * Parse a given input into a mathematical expression or define a new
- * variable or assign value to a variable
- *
- * @param expression
- *            the string to check
- * @return result of the induced calculation
- */
-bool isMinimum(vector<vector<Mat> >& dog_pyr, int octave, int interval, int r,
-		int c) {
-	float intensity = dog_pyr[octave][interval].at<float>(r, c);
+vector<double> histogramize(Mat matrix, int range, int maximum) {
+	int size = maximum / range;
+	vector<double> histo(size);
+	for (int i = 0; i < histo.size(); i++) {
+		histo[i] = 0;
+	}
+	for (int i = 0; i < matrix.rows; i++) {
+		for (int j = 0; j < matrix.cols; j++) {
+			int index = matrix.at<float>(i, j) / range;
+			histo[index]++;
+		}
+	}
+	return histo;
+}
 
-	for (int i = -1; i <= 1; i++)
-		for (int j = -1; j <= 1; j++)
-			for (int k = -1; k <= 1; k++)
-				if (intensity
-						>= dog_pyr[octave][interval + i].at<float>(r + j, c + k)
-						&& (j != 0 || k != 0))
-					return false;
-	return true;
+void computeGradient(vector<vector<Mat> >& dog_pyr,
+		vector<KeyPoint>& features) {
+//ignore edges
+	int range = 10;
+	int maximum = 360;
+
+	for (int z = 0; z < features.size(); z++) {
+		Mat image = dog_pyr[features[z].octave][features[z].size];
+		int keyx = features[z].pt.x;
+		int keyy = features[z].pt.y;
+
+		if (keyx - halfMargin - 1 < 0 || keyx + halfMargin + 1 > image.cols
+				|| keyy - halfMargin - 1 < 0
+				|| keyy + halfMargin + 1 > image.rows) {
+			return;
+		} else {
+
+			Mat tempMagnitude = (Mat_<float>(histogramMargin, histogramMargin));
+			Mat tempGradient = (Mat_<float>(histogramMargin, histogramMargin));
+			for (int i = 0; i < histogramMargin; i++) {
+
+				for (int j = 0; j < histogramMargin; j++) {
+					float diffx, diffy, magnitude, gradient;
+
+					diffx = image.at<float>(keyx + i + 1 - halfMargin,
+							keyy - halfMargin + j)
+							- image.at<float>(keyx + i - 1 - halfMargin,
+									keyy - halfMargin + j);
+					diffy = image.at<float>(keyx - halfMargin + i,
+							keyy + j + 1 - halfMargin)
+							- image.at<float>(keyx - halfMargin + i,
+									keyy + j - 1 - halfMargin);
+					magnitude = sqrt(pow(diffx, 2) + pow(diffy, 2));
+					gradient = atan2f(diffy, diffx);
+
+					if (gradient < 0) {
+						gradient += (2 * PI);
+					}
+					gradient *= 360 / (2 * PI);
+
+					tempMagnitude.at<float>(i, j) = magnitude;
+					tempGradient.at<float>(i, j) = gradient;
+				}
+			}
+
+			keypointsGradients.push_back(tempGradient);
+			keypointsMagnitudes.push_back(tempMagnitude);
+
+			int maxima, secondmax, indexMax, indexSecond;
+
+			vector<double> histo = histogramize(tempGradient, range, maximum);
+
+			maxInHistogram(histo, maxima, secondmax, indexMax, indexSecond);
+
+			int angleOrientation = indexMax * range;
+			angleOrientation = angleOrientation + (range / 2);
+			features[z].angle = angleOrientation;
+		}
+	}
+
 }
 
 /**
@@ -222,7 +275,9 @@ bool cleanPoints(Point loc, Mat& image, int curv_thr) {
 
 //		cout << curvature << endl;
 		// Reject edge points if curvature condition is not satisfied
-		if (deter < 0 || curvature > curv_thr) {
+//		if (deter < 0 || curvature > curv_thr) {
+		if (curvature > curv_thr) {
+
 			// reject_contrast_count++;
 			return false;
 		}
@@ -253,7 +308,7 @@ void getScaleSpaceExtrema(vector<vector<Mat> >& dog_pyr,
 					if (isExtrema(dog_pyr, o, i, r, c)) {
 						if (cleanPoints(Point(c, r), dog_pyr[o][i],
 						R_CURVATURE))
-							keypoints.push_back(KeyPoint(c, r, 0, -1, 0, o));
+							keypoints.push_back(KeyPoint(c, r, i, -1, 0, o));
 //						cout << r << " , " << c << endl;
 					}
 				}
@@ -272,20 +327,21 @@ void drawKeyPoints(vector<KeyPoint>& keypoints, Mat& image) {
 		pt2.x = pt1.x
 				+ cos(keypoints[i].angle * PI / 180.0f)
 						* pow(2, keypoints[i].octave);
-		pt2.y = pt2.y
+		pt2.y = pt1.y
 				+ sin(keypoints[i].angle * PI / 180.0f)
-						* pow(2, keypoints[i].octave);
+						* pow(2, keypoints[i].octave) * 15;
 //		line(image, pt1 * pow(2, keypoints[i].octave),
-//				pt2 * pow(2, keypoints[i].octave), Scalar(0, 255, 0));
-		circle(image, pt1 * pow(2, keypoints[i].octave), 1,
-				colors[keypoints[i].octave]);
+//				pt2 * pow(2, keypoints[i].octave), Scalar(150, 0, 0), 2);
+		circle(image, pt1 * pow(2, keypoints[i].octave), 3, colors[2], -1);
+
+//		circle(image, pt2, 1, Scalar(255, 255, 255));
 	}
 	imshow("SIFT", image);
 }
 
 int main(int argc, char** argv) {
-	Mat image;
-	Mat imageColor = imread("../Test-Data/images/frame_18.png",
+	Mat image, image2;
+	Mat imageColor = imread("../Test-Data/images/cluster150.png",
 			CV_LOAD_IMAGE_COLOR);
 
 	if (!imageColor.data) {
@@ -297,6 +353,8 @@ int main(int argc, char** argv) {
 //			Size(imageColor.cols / 2, imageColor.rows / 2));
 //	normalize image and define octave numbers and guassian images to produce
 	cvtColor(imageColor, image, CV_BGR2GRAY);
+	cvtColor(imageColor, image2, CV_BGR2GRAY);
+
 	normalize(image, image, 0, 1, NORM_MINMAX, CV_32F);
 	imshow("BG", image);
 
@@ -306,9 +364,19 @@ int main(int argc, char** argv) {
 
 	vector<KeyPoint> keypoints;
 	getScaleSpaceExtrema(dogpyr, keypoints);
+	computeGradient(dogpyr, keypoints);
 	cout << "SIZE: " << keypoints.size() << endl;
-//	cleanPoints(keypoints, image, R_CURVATURE);
+
 	drawKeyPoints(keypoints, imageColor);
+
+	SiftFeatureDetector detector;
+	vector<cv::KeyPoint> siftkeypoints;
+	detector.detect(image2, siftkeypoints);
+
+	// Add results to image and save.
+	cv::Mat output;
+	cv::drawKeypoints(image2, siftkeypoints, output);
+	cv::imshow("sift_result", output);
 
 	cout << "---------------------------" << endl;
 	waitKey(0);
