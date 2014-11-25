@@ -14,11 +14,15 @@ Mat downSample(Mat& image)
 
 	Mat temp = Mat(Size(blurredImage.cols / 2, blurredImage.rows), image.type());
 	for (int i = 0; i < temp.cols; i++)
+	{
 		blurredImage.col(i * 2).copyTo(temp.col(i));
+	}
 
 	Mat resizedImage = Mat(Size(temp.cols, temp.rows / 2), image.type());
 	for (int i = 0; i < resizedImage.rows; i++)
+	{
 		temp.row(i * 2).copyTo(resizedImage.row(i));
+	}
 
 	return resizedImage;
 }
@@ -48,15 +52,12 @@ void buildGaussianPyramid(Mat& image, vector<vector<Mat> >& gauss_pyr, int nOcta
 			Mat blurredImage;
 			GaussianBlur(tempImage, blurredImage, Size(0, 0), sigma, 0);
 			pyr_intervals.push_back(blurredImage);
-			blurredImage.release();
 			sigma *= SIFT_STEP_SIGMA;
 		}
 
 		gauss_pyr.push_back(pyr_intervals);
 		tempImage = downSample(tempImage);
 	}
-
-	tempImage.release();
 }
 
 /**
@@ -69,6 +70,7 @@ void buildGaussianPyramid(Mat& image, vector<vector<Mat> >& gauss_pyr, int nOcta
  */
 vector<vector<Mat> > buildDogPyr(vector<vector<Mat> > gauss_pyr)
 {
+	int nOctaves = gauss_pyr.size();
 	vector<vector<Mat> > dog_pyr;
 
 	for (int i = 0; i < nOctaves; i++)
@@ -145,7 +147,8 @@ void getScaleSpaceExtrema(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypo
 				for (int c = SIFT_IMG_BORDER; c < dog_pyr[i][0].cols - SIFT_IMG_BORDER; c++)
 				{
 					if (isExtrema(dog_pyr, i, j, r, c))
-						keypoints.push_back(KeyPoint(c, r, j, -1, 0, i));
+						if (cleanPoints(Point(c, r), dog_pyr[i][j], SIFT_CURV_THR))
+							keypoints.push_back(KeyPoint(c, r, j, -1, 0, i));
 				}
 			}
 		}
@@ -161,17 +164,19 @@ void getScaleSpaceExtrema(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypo
  *
  * @return true if good feature else false
  */
-bool cleanPoints(Point loc, Mat& image, int curv_thr)
+bool cleanPoints(Point position, Mat& image, int curv_thr)
 {
 	float rx, ry, fxx, fxy, fyy, deter;
 	float trace, curvature;
 
-	if (abs(image.at<float>(loc)) < SIFT_CONTR_THR)
+	if (abs(image.at<float>(position)) < SIFT_CONTR_THR)
+	{
 		return false;
+	}
 	else
 	{
-		rx = loc.x;
-		ry = loc.y;
+		rx = position.x;
+		ry = position.y;
 		fxx = image.at<float>(rx - 1, ry) + image.at<float>(rx + 1, ry) - 2 * image.at<float>(rx, ry);
 		fyy = image.at<float>(rx, ry - 1) + image.at<float>(rx, ry + 1) - 2 * image.at<float>(rx, ry);
 		fxy = image.at<float>(rx - 1, ry - 1) + image.at<float>(rx + 1, ry + 1) - image.at<float>(rx - 1, ry + 1)
@@ -182,8 +187,147 @@ bool cleanPoints(Point loc, Mat& image, int curv_thr)
 		curvature = trace * trace / deter;
 
 		if (deter < SIFT_DETER_THR || curvature > curv_thr)
+		{
 			return false;
+		}
 	}
 
 	return true;
+}
+
+/**************************
+ *						  *
+ *		TO CLEAN UP		  *
+ *						  *
+ **************************/
+vector<Mat> keypointsGradients;
+vector<Mat> keypointsMagnitudes;
+vector<vector<double> > descriptorAllFeatures;
+
+void maxInHistogram(vector<double> histogram, int &maximum, int &secondmax, int &indexMax, int &indexSecond)
+{
+	maximum = histogram[0];
+	secondmax = histogram[0];
+	indexMax = 0;
+	indexSecond = 0;
+
+	for (size_t i = 0; i < histogram.size(); i++)
+	{
+		if (maximum < histogram[i])
+		{
+			secondmax = maximum;
+			indexSecond = indexMax;
+
+			maximum = histogram[i];
+			indexMax = i;
+		}
+	}
+}
+
+vector<double> histogramize(Mat matrix, int range, int maximum)
+{
+	int size = maximum / range;
+	vector<double> histo(size);
+	for (size_t i = 0; i < histo.size(); i++)
+	{
+		histo[i] = 0;
+	}
+	for (int i = 0; i < matrix.rows; i++)
+	{
+		for (int j = 0; j < matrix.cols; j++)
+		{
+			int index = matrix.at<float>(i, j) / range;
+			histo[index]++;
+		}
+	}
+	return histo;
+}
+
+void computeGradient(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& features)
+{
+	int range = 10;
+	int maximum = 360;
+
+	for (size_t z = 0; z < features.size(); z++)
+	{
+		Mat image = dog_pyr[features[z].octave][features[z].size];
+		int keyx = features[z].pt.x;
+		int keyy = features[z].pt.y;
+
+		if (keyx - SIFT_HIST_BOREDER - 1 < 0 || keyx + SIFT_HIST_BOREDER + 1 > image.cols
+				|| keyy - SIFT_HIST_BOREDER - 1 < 0 || keyy + SIFT_HIST_BOREDER + 1 > image.rows)
+		{
+			return;
+		}
+		else
+		{
+			Mat tempMagnitude = (Mat_<float>(SIFT_HIST_BOREDER * 2, SIFT_HIST_BOREDER * 2));
+			Mat tempGradient = (Mat_<float>(SIFT_HIST_BOREDER * 2, SIFT_HIST_BOREDER * 2));
+			for (int i = 0; i < SIFT_HIST_BOREDER * 2; i++)
+			{
+
+				for (int j = 0; j < SIFT_HIST_BOREDER * 2; j++)
+				{
+					float diffx, diffy, magnitude, gradient;
+
+					diffx = image.at<float>(keyx + i + 1 - SIFT_HIST_BOREDER, keyy - SIFT_HIST_BOREDER + j)
+							- image.at<float>(keyx + i - 1 - SIFT_HIST_BOREDER, keyy - SIFT_HIST_BOREDER + j);
+					diffy = image.at<float>(keyx - SIFT_HIST_BOREDER + i, keyy + j + 1 - SIFT_HIST_BOREDER)
+							- image.at<float>(keyx - SIFT_HIST_BOREDER + i, keyy + j - 1 - SIFT_HIST_BOREDER);
+					magnitude = sqrt(pow(diffx, 2) + pow(diffy, 2));
+					gradient = atan2f(diffy, diffx);
+
+					if (gradient < 0)
+					{
+						gradient += (2 * PI);
+					}
+					gradient *= 360 / (2 * PI);
+
+					tempMagnitude.at<float>(i, j) = magnitude;
+					tempGradient.at<float>(i, j) = gradient;
+				}
+			}
+
+			keypointsGradients.push_back(tempGradient);
+			keypointsMagnitudes.push_back(tempMagnitude);
+			int maxima, secondmax, indexMax, indexSecond;
+
+			vector<double> histo = histogramize(tempGradient, range, maximum);
+
+			maxInHistogram(histo, maxima, secondmax, indexMax, indexSecond);
+
+			int angleOrientation = indexMax * range;
+			angleOrientation = angleOrientation + (range / 2);
+			features[z].angle = angleOrientation;
+		}
+	}
+}
+
+void computeDescriptors()
+{
+	for (size_t points = 0; points < keypointsGradients.size(); points++)
+	{
+		vector<double> singleDescriptor;
+		Mat temp = keypointsGradients[points];
+		singleDescriptor.reserve(128);
+		for (int xBlock = 0; xBlock < temp.cols; xBlock += 4)
+		{
+			for (int yBlock = 0; yBlock < 16; yBlock += 4)
+			{
+				Mat blockMatrix = Mat::zeros(4, 4, CV_32F);
+				for (int i = 0; i < 4; i++)
+				{
+					for (int j = 0; j < 4; j++)
+					{
+						blockMatrix.at<float>(i, j) = temp.at<float>(xBlock + i, yBlock + j);
+					}
+				}
+
+				vector<double> singleHistogram = histogramize(blockMatrix, 45, 360);
+				singleDescriptor.insert(singleDescriptor.end(), singleHistogram.begin(), singleHistogram.end());
+			}
+		}
+
+		descriptorAllFeatures.push_back(singleDescriptor);
+	}
 }
