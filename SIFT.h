@@ -18,7 +18,7 @@
 #define SIFT_HIST_BOREDER					8
 #define SIFT_CURV_THR						10
 #define SIFT_CONTR_THR						0.03
-#define SIFT_DETER_THR						-0.00001
+#define SIFT_DETER_THR						0
 #define INTERPOLATION_SIGMA					0.707106781
 #define SIFT_INIT_SIGMA						0.707106781
 #define SIFT_STEP_SIGMA						1.414213562

@@ -23,7 +23,8 @@ void findSiftInterestPoint(Mat& image, vector<KeyPoint>& keypoints, int nOctaves
 Mat downSample(Mat& image)
 {
 	Mat blurredImage;
-	GaussianBlur(image, blurredImage, Size(0, 0), INTERPOLATION_SIGMA, 0);
+	image.copyTo(blurredImage);
+//	GaussianBlur(image, blurredImage, Size(0, 0), INTERPOLATION_SIGMA, 0);
 
 	Mat temp = Mat(Size(blurredImage.cols / 2, blurredImage.rows), image.type());
 	for (int i = 0; i < temp.cols; i++)
