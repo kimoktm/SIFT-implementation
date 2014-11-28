@@ -1,5 +1,18 @@
 #include "SIFT.h"
 
+void findSiftInterestPoint(Mat& image, vector<KeyPoint>& keypoints, int nOctaves)
+{
+	Mat _image;
+	cvtColor(image, _image, CV_BGR2GRAY);
+	normalize(_image, _image, 0, 1, NORM_MINMAX, CV_32F);
+
+	vector<vector<Mat> > pyr, dog_pyr;
+	buildGaussianPyramid(_image, pyr, nOctaves);
+	dog_pyr = buildDogPyr(pyr);
+	getScaleSpaceExtrema(dog_pyr, keypoints);
+	computeOrientationHist(dog_pyr, keypoints);
+}
+
 /**
  * Downsamples an image to quarter its size
  * half in each dimension
@@ -195,16 +208,19 @@ bool cleanPoints(Point position, Mat& image, int curv_thr)
 	return true;
 }
 
-/**************************
- *						  *
- *		TO CLEAN UP		  *
- *						  *
- **************************/
-vector<Mat> keypointsGradients;
-vector<Mat> keypointsMagnitudes;
-vector<vector<double> > descriptorAllFeatures;
-
-void maxInHistogram(vector<double> histogram, int &maximum, int &secondmax, int &indexMax, int &indexSecond)
+/**
+ * Gets the first and second maximums
+ * in a given histogram
+ *
+ * @param histogram		The given histogram
+ * @param maximum		The first maximum value
+ * @param indexMax		The index of first maximum
+ * @param secondmax		The Second maximum value
+ * @param indexSecond	The index of second maximum
+ *
+ * @return	maximum, indexMax, secondmax, indexSecond
+ */
+void histogramMax(vector<double> histogram, int &maximum, int &indexMax, int &secondmax, int &indexSecond)
 {
 	maximum = histogram[0];
 	secondmax = histogram[0];
@@ -224,14 +240,26 @@ void maxInHistogram(vector<double> histogram, int &maximum, int &secondmax, int 
 	}
 }
 
-vector<double> histogramize(Mat matrix, int range, int maximum)
+/**
+ * Build a gradient histogram from
+ * the given window and range
+ *
+ * @param matrix		Matrix Window
+ * @param range			The histogram span
+ * @param maximum		Maximum value in the histogram
+ *
+ * @return	Returns the calcuated histogram
+ */
+vector<double> buildHistogram(Mat matrix, int range, int maximum)
 {
 	int size = maximum / range;
 	vector<double> histo(size);
+
 	for (size_t i = 0; i < histo.size(); i++)
 	{
 		histo[i] = 0;
 	}
+
 	for (int i = 0; i < matrix.rows; i++)
 	{
 		for (int j = 0; j < matrix.cols; j++)
@@ -240,24 +268,36 @@ vector<double> histogramize(Mat matrix, int range, int maximum)
 			histo[index]++;
 		}
 	}
+
 	return histo;
 }
 
-void computeGradient(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& features)
+/**
+ * Compute the Orientation histogram
+ * for the DOG pyramid and updates
+ * the orientation of each keypoint
+ *
+ * @param dog_pyr		Difference of Guassians pyramid
+ * @param keypoints		Keypoints vector
+ *
+ * @return	Returns keypointsGradients
+ */
+vector<Mat> computeOrientationHist(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypoints)
 {
 	int range = 10;
 	int maximum = 360;
+	vector<Mat> keypointsGradients;
 
-	for (size_t z = 0; z < features.size(); z++)
+	for (size_t z = 0; z < keypoints.size(); z++)
 	{
-		Mat image = dog_pyr[features[z].octave][features[z].size];
-		int keyx = features[z].pt.x;
-		int keyy = features[z].pt.y;
+		Mat image = dog_pyr[keypoints[z].octave][keypoints[z].size];
+		int keyx = keypoints[z].pt.x;
+		int keyy = keypoints[z].pt.y;
 
 		if (keyx - SIFT_HIST_BOREDER - 1 < 0 || keyx + SIFT_HIST_BOREDER + 1 > image.cols
 				|| keyy - SIFT_HIST_BOREDER - 1 < 0 || keyy + SIFT_HIST_BOREDER + 1 > image.rows)
 		{
-			return;
+			return keypointsGradients;
 		}
 		else
 		{
@@ -265,7 +305,6 @@ void computeGradient(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& features)
 			Mat tempGradient = (Mat_<float>(SIFT_HIST_BOREDER * 2, SIFT_HIST_BOREDER * 2));
 			for (int i = 0; i < SIFT_HIST_BOREDER * 2; i++)
 			{
-
 				for (int j = 0; j < SIFT_HIST_BOREDER * 2; j++)
 				{
 					float diffx, diffy, magnitude, gradient;
@@ -289,22 +328,33 @@ void computeGradient(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& features)
 			}
 
 			keypointsGradients.push_back(tempGradient);
-			keypointsMagnitudes.push_back(tempMagnitude);
 			int maxima, secondmax, indexMax, indexSecond;
 
-			vector<double> histo = histogramize(tempGradient, range, maximum);
+			vector<double> histo = buildHistogram(tempGradient, range, maximum);
 
-			maxInHistogram(histo, maxima, secondmax, indexMax, indexSecond);
+			histogramMax(histo, maxima, indexMax, secondmax, indexSecond);
 
 			int angleOrientation = indexMax * range;
 			angleOrientation = angleOrientation + (range / 2);
-			features[z].angle = angleOrientation;
+			keypoints[z].angle = angleOrientation;
 		}
 	}
+
+	return keypointsGradients;
 }
 
-void computeDescriptors()
+/**
+ * Compute the SIFT descriptor of
+ * each keypoints
+ *
+ * @param keypointsGradients	Gradients Vector
+ *
+ * @return	Returns vector of all descriptors
+ */
+vector<vector<double> > computeDescriptors(vector<Mat> keypointsGradients)
 {
+	vector<vector<double> > descriptors;
+
 	for (size_t points = 0; points < keypointsGradients.size(); points++)
 	{
 		vector<double> singleDescriptor;
@@ -323,11 +373,38 @@ void computeDescriptors()
 					}
 				}
 
-				vector<double> singleHistogram = histogramize(blockMatrix, 45, 360);
+				vector<double> singleHistogram = buildHistogram(blockMatrix, 45, 360);
 				singleDescriptor.insert(singleDescriptor.end(), singleHistogram.begin(), singleHistogram.end());
 			}
 		}
 
-		descriptorAllFeatures.push_back(singleDescriptor);
+		descriptors.push_back(singleDescriptor);
+	}
+
+	return descriptors;
+}
+
+/**
+ * Draws the given keypoints
+ * on the given image
+ *
+ * @param keypoints		Keypoints vector
+ * @param image			image to draw on
+ *
+ * @return	The updated image
+ */
+void drawKeyPoints(Mat& image, vector<KeyPoint>& keypoints)
+{
+	for (size_t i = 0; i < keypoints.size(); i++)
+	{
+		Point pt1, pt2;
+		pt1 = keypoints[i].pt;
+		pt2.x = pt1.x + cos(keypoints[i].angle * PI / 180.0f) * pow(2, keypoints[i].octave);
+		pt2.y = pt1.y + sin(keypoints[i].angle * PI / 180.0f) * pow(2, keypoints[i].octave);
+		line(image, pt1 * pow(2, keypoints[i].octave), pt2 * pow(2, keypoints[i].octave), Scalar(150, 0, 0), 0.5,
+		CV_AA);
+
+		circle(image, pt1 * pow(2, keypoints[i].octave), 3, Scalar(80, 80, 80), -1, CV_AA);
+		circle(image, pt1 * pow(2, keypoints[i].octave), 3, Scalar(0, 69, 255), -1, CV_AA);
 	}
 }
