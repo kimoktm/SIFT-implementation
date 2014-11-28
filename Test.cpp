@@ -11,8 +11,9 @@ int main(int argc, char** argv)
 	}
 
 	vector<KeyPoint> keypoints;
-	findSiftInterestPoint(imageColor, keypoints);
-	drawKeyPoints(imageColor, keypoints);
+	SIFT detector;
+	detector.findSiftInterestPoint(imageColor, keypoints);
+	detector.drawKeyPoints(imageColor, keypoints);
 	imshow("SIFT features", imageColor);
 
 	waitKey(0);

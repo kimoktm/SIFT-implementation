@@ -1,44 +1,16 @@
 #include "SIFT.h"
 
-void findSiftInterestPoint(Mat& image, vector<KeyPoint>& keypoints, int nOctaves)
+void SIFT::findSiftInterestPoint(Mat& image, vector<KeyPoint>& keypoints, int nOctaves, int nIntervals)
 {
 	Mat _image;
 	cvtColor(image, _image, CV_BGR2GRAY);
 	normalize(_image, _image, 0, 1, NORM_MINMAX, CV_32F);
 
 	vector<vector<Mat> > pyr, dog_pyr;
-	buildGaussianPyramid(_image, pyr, nOctaves);
+	buildGaussianPyramid(_image, pyr, nOctaves, nIntervals);
 	dog_pyr = buildDogPyr(pyr);
 	getScaleSpaceExtrema(dog_pyr, keypoints);
 	computeOrientationHist(dog_pyr, keypoints);
-}
-
-/**
- * Downsamples an image to quarter its size
- * half in each dimension
- *
- * @param image		The input image to downsample
- * @return Returns the resized image
- */
-Mat downSample(Mat& image)
-{
-	Mat blurredImage;
-	image.copyTo(blurredImage);
-//	GaussianBlur(image, blurredImage, Size(0, 0), INTERPOLATION_SIGMA, 0);
-
-	Mat temp = Mat(Size(blurredImage.cols / 2, blurredImage.rows), image.type());
-	for (int i = 0; i < temp.cols; i++)
-	{
-		blurredImage.col(i * 2).copyTo(temp.col(i));
-	}
-
-	Mat resizedImage = Mat(Size(temp.cols, temp.rows / 2), image.type());
-	for (int i = 0; i < resizedImage.rows; i++)
-	{
-		temp.row(i * 2).copyTo(resizedImage.row(i));
-	}
-
-	return resizedImage;
 }
 
 /**
@@ -50,7 +22,7 @@ Mat downSample(Mat& image)
  *
  * @return gauss_pyr
  */
-void buildGaussianPyramid(Mat& image, vector<vector<Mat> >& gauss_pyr, int nOctaves)
+void SIFT::buildGaussianPyramid(Mat& image, vector<vector<Mat> >& gauss_pyr, int nOctaves, int nIntervals)
 {
 	double sigma;
 	Mat tempImage;
@@ -61,7 +33,7 @@ void buildGaussianPyramid(Mat& image, vector<vector<Mat> >& gauss_pyr, int nOcta
 		sigma = SIFT_INIT_SIGMA;
 		vector<Mat> pyr_intervals;
 
-		for (int j = 0; j < SIFT_INTVLS + 3; j++)
+		for (int j = 0; j < nIntervals + 3; j++)
 		{
 			Mat blurredImage;
 			GaussianBlur(tempImage, blurredImage, Size(0, 0), sigma, 0);
@@ -82,7 +54,7 @@ void buildGaussianPyramid(Mat& image, vector<vector<Mat> >& gauss_pyr, int nOcta
  *
  * @return Returns the Difference of Guassians pyramid
  */
-vector<vector<Mat> > buildDogPyr(vector<vector<Mat> > gauss_pyr)
+vector<vector<Mat> > SIFT::buildDogPyr(vector<vector<Mat> > gauss_pyr)
 {
 	int nOctaves = gauss_pyr.size();
 	vector<vector<Mat> > dog_pyr;
@@ -114,7 +86,7 @@ vector<vector<Mat> > buildDogPyr(vector<vector<Mat> > gauss_pyr)
  *
  * @return Returns true if extrema else false
  */
-bool isExtrema(vector<vector<Mat> >& dog_pyr, int octave, int interval, int r, int c)
+bool SIFT::isExtrema(vector<vector<Mat> >& dog_pyr, int octave, int interval, int r, int c)
 {
 	float intensity = dog_pyr[octave][interval].at<float>(r, c);
 
@@ -147,7 +119,7 @@ bool isExtrema(vector<vector<Mat> >& dog_pyr, int octave, int interval, int r, i
  *
  * @return list of keypoints
  */
-void getScaleSpaceExtrema(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypoints)
+void SIFT::getScaleSpaceExtrema(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypoints)
 {
 	int octaves = dog_pyr.size();
 	int intervals = dog_pyr[0].size() - 2;
@@ -178,12 +150,12 @@ void getScaleSpaceExtrema(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypo
  *
  * @return true if good feature else false
  */
-bool cleanPoints(Point position, Mat& image, int curv_thr)
+bool SIFT::cleanPoints(Point position, Mat& image, int curv_thr, float cont_thr, float dtr_thr)
 {
 	float rx, ry, fxx, fxy, fyy, deter;
 	float trace, curvature;
 
-	if (abs(image.at<float>(position)) < SIFT_CONTR_THR)
+	if (abs(image.at<float>(position)) < cont_thr)
 	{
 		return false;
 	}
@@ -221,20 +193,15 @@ bool cleanPoints(Point position, Mat& image, int curv_thr)
  *
  * @return	maximum, indexMax, secondmax, indexSecond
  */
-void histogramMax(vector<double> histogram, int &maximum, int &indexMax, int &secondmax, int &indexSecond)
+void SIFT::histogramMax(vector<double> histogram, int &maximum, int &indexMax)
 {
 	maximum = histogram[0];
-	secondmax = histogram[0];
 	indexMax = 0;
-	indexSecond = 0;
 
 	for (size_t i = 0; i < histogram.size(); i++)
 	{
 		if (maximum < histogram[i])
 		{
-			secondmax = maximum;
-			indexSecond = indexMax;
-
 			maximum = histogram[i];
 			indexMax = i;
 		}
@@ -251,7 +218,7 @@ void histogramMax(vector<double> histogram, int &maximum, int &indexMax, int &se
  *
  * @return	Returns the calcuated histogram
  */
-vector<double> buildHistogram(Mat matrix, int range, int maximum)
+vector<double> SIFT::buildHistogram(Mat matrix, int range, int maximum)
 {
 	int size = maximum / range;
 	vector<double> histo(size);
@@ -283,11 +250,10 @@ vector<double> buildHistogram(Mat matrix, int range, int maximum)
  *
  * @return	Returns keypointsGradients
  */
-vector<Mat> computeOrientationHist(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypoints)
+void SIFT::computeOrientationHist(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypoints)
 {
 	int range = 10;
 	int maximum = 360;
-	vector<Mat> keypointsGradients;
 
 	for (size_t z = 0; z < keypoints.size(); z++)
 	{
@@ -298,50 +264,39 @@ vector<Mat> computeOrientationHist(vector<vector<Mat> >& dog_pyr, vector<KeyPoin
 		if (keyx - SIFT_HIST_BOREDER - 1 < 0 || keyx + SIFT_HIST_BOREDER + 1 > image.cols
 				|| keyy - SIFT_HIST_BOREDER - 1 < 0 || keyy + SIFT_HIST_BOREDER + 1 > image.rows)
 		{
-			return keypointsGradients;
+			return;
 		}
-		else
+
+		Mat tempMagnitude = (Mat_<float>(SIFT_HIST_BOREDER * 2, SIFT_HIST_BOREDER * 2));
+		Mat tempGradient = (Mat_<float>(SIFT_HIST_BOREDER * 2, SIFT_HIST_BOREDER * 2));
+		for (int i = 0; i < SIFT_HIST_BOREDER * 2; i++)
 		{
-			Mat tempMagnitude = (Mat_<float>(SIFT_HIST_BOREDER * 2, SIFT_HIST_BOREDER * 2));
-			Mat tempGradient = (Mat_<float>(SIFT_HIST_BOREDER * 2, SIFT_HIST_BOREDER * 2));
-			for (int i = 0; i < SIFT_HIST_BOREDER * 2; i++)
+			for (int j = 0; j < SIFT_HIST_BOREDER * 2; j++)
 			{
-				for (int j = 0; j < SIFT_HIST_BOREDER * 2; j++)
-				{
-					float diffx, diffy, magnitude, gradient;
+				float diffx, diffy, magnitude, gradient;
 
-					diffx = image.at<float>(keyx + i + 1 - SIFT_HIST_BOREDER, keyy - SIFT_HIST_BOREDER + j)
-							- image.at<float>(keyx + i - 1 - SIFT_HIST_BOREDER, keyy - SIFT_HIST_BOREDER + j);
-					diffy = image.at<float>(keyx - SIFT_HIST_BOREDER + i, keyy + j + 1 - SIFT_HIST_BOREDER)
-							- image.at<float>(keyx - SIFT_HIST_BOREDER + i, keyy + j - 1 - SIFT_HIST_BOREDER);
-					magnitude = sqrt(pow(diffx, 2) + pow(diffy, 2));
-					gradient = atan2f(diffy, diffx);
-
-					if (gradient < 0)
-					{
-						gradient += (2 * PI);
-					}
-					gradient *= 360 / (2 * PI);
-
-					tempMagnitude.at<float>(i, j) = magnitude;
-					tempGradient.at<float>(i, j) = gradient;
-				}
+				diffx = image.at<float>(keyx + i + 1 - SIFT_HIST_BOREDER, keyy - SIFT_HIST_BOREDER + j)
+						- image.at<float>(keyx + i - 1 - SIFT_HIST_BOREDER, keyy - SIFT_HIST_BOREDER + j);
+				diffy = image.at<float>(keyx - SIFT_HIST_BOREDER + i, keyy + j + 1 - SIFT_HIST_BOREDER)
+						- image.at<float>(keyx - SIFT_HIST_BOREDER + i, keyy + j - 1 - SIFT_HIST_BOREDER);
+				magnitude = sqrt(pow(diffx, 2) + pow(diffy, 2));
+				gradient = rad2deg(atan2f(diffy, diffx));
+				tempMagnitude.at<float>(i, j) = magnitude;
+				tempGradient.at<float>(i, j) = gradient;
 			}
-
-			keypointsGradients.push_back(tempGradient);
-			int maxima, secondmax, indexMax, indexSecond;
-
-			vector<double> histo = buildHistogram(tempGradient, range, maximum);
-
-			histogramMax(histo, maxima, indexMax, secondmax, indexSecond);
-
-			int angleOrientation = indexMax * range;
-			angleOrientation = angleOrientation + (range / 2);
-			keypoints[z].angle = angleOrientation;
 		}
-	}
 
-	return keypointsGradients;
+		keypointsGradients.push_back(tempGradient);
+		keypointsMagnitudes.push_back(tempMagnitude);
+		int maxima, indexMax;
+
+		vector<double> histo = buildHistogram(tempGradient, range, maximum);
+		histogramMax(histo, maxima, indexMax);
+
+		int angleOrientation = indexMax * range;
+		angleOrientation = angleOrientation + (range / 2);
+		keypoints[z].angle = angleOrientation;
+	}
 }
 
 /**
@@ -352,7 +307,7 @@ vector<Mat> computeOrientationHist(vector<vector<Mat> >& dog_pyr, vector<KeyPoin
  *
  * @return	Returns vector of all descriptors
  */
-vector<vector<double> > computeDescriptors(vector<Mat> keypointsGradients)
+vector<vector<double> > SIFT::computeDescriptors()
 {
 	vector<vector<double> > descriptors;
 
@@ -363,12 +318,12 @@ vector<vector<double> > computeDescriptors(vector<Mat> keypointsGradients)
 		singleDescriptor.reserve(128);
 		for (int xBlock = 0; xBlock < temp.cols; xBlock += 4)
 		{
-			for (int yBlock = 0; yBlock < 16; yBlock += 4)
+			for (int yBlock = 0; yBlock < temp.rows; yBlock += 4)
 			{
 				Mat blockMatrix = Mat::zeros(4, 4, CV_32F);
-				for (int i = 0; i < 4; i++)
+				for (int i = 0; i < blockMatrix.cols; i++)
 				{
-					for (int j = 0; j < 4; j++)
+					for (int j = 0; j < blockMatrix.rows; j++)
 					{
 						blockMatrix.at<float>(i, j) = temp.at<float>(xBlock + i, yBlock + j);
 					}
@@ -394,14 +349,14 @@ vector<vector<double> > computeDescriptors(vector<Mat> keypointsGradients)
  *
  * @return	The updated image
  */
-void drawKeyPoints(Mat& image, vector<KeyPoint>& keypoints)
+void SIFT::drawKeyPoints(Mat& image, vector<KeyPoint>& keypoints)
 {
 	for (size_t i = 0; i < keypoints.size(); i++)
 	{
 		Point pt1, pt2;
 		pt1 = keypoints[i].pt;
-		pt2.x = pt1.x + cos(keypoints[i].angle * PI / 180.0f) * pow(2, keypoints[i].octave);
-		pt2.y = pt1.y + sin(keypoints[i].angle * PI / 180.0f) * pow(2, keypoints[i].octave);
+		pt2.x = pt1.x + cos(deg2rad(keypoints[i].angle)) * pow(2, keypoints[i].octave);
+		pt2.y = pt1.y + sin(deg2rad(keypoints[i].angle)) * pow(2, keypoints[i].octave);
 		line(image, pt1 * pow(2, keypoints[i].octave), pt2 * pow(2, keypoints[i].octave), Scalar(150, 0, 0), 0.5,
 		CV_AA);
 
@@ -409,3 +364,62 @@ void drawKeyPoints(Mat& image, vector<KeyPoint>& keypoints)
 		circle(image, pt1 * pow(2, keypoints[i].octave), 3, Scalar(0, 69, 255), -1, CV_AA);
 	}
 }
+
+/**
+ * Convert a given angle
+ * from radians to degrees
+ *
+ * @param rad		Angle in radians
+ *
+ * @return	Returns the angle in degrees
+ */
+double SIFT::rad2deg(float rad)
+{
+	if (rad < 0)
+		rad += (2 * PI);
+	rad *= 360 / (2 * PI);
+
+	return rad;
+}
+
+/**
+ * Convert a given angle
+ * from degrees to radians
+ *
+ * @param deg		Angle in degrees
+ *
+ * @return	Returns the angle in Radians
+ */
+double SIFT::deg2rad(float deg)
+{
+	return deg * PI / 180.0f;
+}
+
+/**
+ * Downsamples an image to quarter its size
+ * half in each dimension
+ *
+ * @param image		The input image to downsample
+ * @return Returns the resized image
+ */
+Mat SIFT::downSample(Mat& image)
+{
+	Mat blurredImage;
+	image.copyTo(blurredImage);
+	GaussianBlur(image, blurredImage, Size(0, 0), INTERPOLATION_SIGMA, 0);
+
+	Mat temp = Mat(Size(blurredImage.cols / 2, blurredImage.rows), image.type());
+	for (int i = 0; i < temp.cols; i++)
+	{
+		blurredImage.col(i * 2).copyTo(temp.col(i));
+	}
+
+	Mat resizedImage = Mat(Size(temp.cols, temp.rows / 2), image.type());
+	for (int i = 0; i < resizedImage.rows; i++)
+	{
+		temp.row(i * 2).copyTo(resizedImage.row(i));
+	}
+
+	return resizedImage;
+}
+

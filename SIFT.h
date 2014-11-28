@@ -1,5 +1,5 @@
 /*
- * main.cpp
+ * SIFT.h
  *
  *  Created on: Nov 18, 2014
  *  Author: Ahmed, Karim, Mostafa
@@ -14,6 +14,7 @@
 #include "opencv2/highgui/highgui.hpp"
 
 #define SIFT_INTVLS							5
+#define SIFT_OCTVES							4
 #define SIFT_IMG_BORDER 					10
 #define SIFT_HIST_BOREDER					8
 #define SIFT_CURV_THR						10
@@ -27,13 +28,31 @@
 using namespace std;
 using namespace cv;
 
-void findSiftInterestPoint(Mat& image, vector<KeyPoint>& keypoints, int nOctaves = 4);
-void buildGaussianPyramid(Mat& image, vector<vector<Mat> >& pyr, int nOctaves);
-bool cleanPoints(Point position, Mat& image, int curv_thr);
-Mat downSample(Mat& image);
-vector<vector<Mat> > buildDogPyr(vector<vector<Mat> > gauss_pyr);
-vector<Mat> computeOrientationHist(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypoints);
-void getScaleSpaceExtrema(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypoints);
-void drawKeyPoints(Mat& image, vector<KeyPoint>& keypoints);
+class SIFT
+{
+private:
+	vector<Mat> keypointsGradients;
+	vector<Mat> keypointsMagnitudes;
+
+	double deg2rad(float deg);
+	double rad2deg(float rad);
+	Mat downSample(Mat& image);
+
+	bool isExtrema(vector<vector<Mat> >& dog_pyr, int octave, int interval, int r, int c);
+	bool cleanPoints(Point position, Mat& image, int curv_thr = SIFT_CURV_THR, float cont_thr = SIFT_CONTR_THR,
+			float dtr_thr = SIFT_DETER_THR);
+	void histogramMax(vector<double> histogram, int &maximum, int &indexMax);
+	vector<double> buildHistogram(Mat matrix, int range, int maximum);
+public:
+	void findSiftInterestPoint(Mat& image, vector<KeyPoint>& keypoints, int nOctaves = SIFT_OCTVES, int nIntervals =
+	SIFT_INTVLS);
+	void buildGaussianPyramid(Mat& image, vector<vector<Mat> >& pyr, int nOctaves, int nIntervals);
+	vector<vector<Mat> > buildDogPyr(vector<vector<Mat> > gauss_pyr);
+	void computeOrientationHist(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypoints);
+	void getScaleSpaceExtrema(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypoints);
+	vector<vector<double> > computeDescriptors();
+	void drawKeyPoints(Mat& image, vector<KeyPoint>& keypoints);
+};
 
 #endif
+
