@@ -38,20 +38,22 @@ private:
 	double rad2deg(float rad);
 	Mat downSample(Mat& image);
 
-	bool isExtrema(vector<vector<Mat> >& dog_pyr, int octave, int interval, int r, int c);
-	bool cleanPoints(Point position, Mat& image, int curv_thr = SIFT_CURV_THR, float cont_thr = SIFT_CONTR_THR,
-			float dtr_thr = SIFT_DETER_THR);
 	void histogramMax(vector<double> histogram, int &maximum, int &indexMax);
+	bool isExtrema(vector<vector<Mat> >& dog_pyr, int octave, int interval, int r, int c);
+	bool cleanPoints(Point position, Mat& image, int curv_thr = SIFT_CURV_THR,
+			float cont_thr = SIFT_CONTR_THR, float dtr_thr = SIFT_DETER_THR);
+
 	vector<double> buildHistogram(Mat matrix, int range, int maximum);
 public:
-	void findSiftInterestPoint(Mat& image, vector<KeyPoint>& keypoints, int nOctaves = SIFT_OCTVES, int nIntervals =
-	SIFT_INTVLS);
+	void findSiftInterestPoint(Mat& image, vector<KeyPoint>& keypoints,
+			int nOctaves = SIFT_OCTVES, int nIntervals = SIFT_INTVLS);
 	void buildGaussianPyramid(Mat& image, vector<vector<Mat> >& pyr, int nOctaves, int nIntervals);
-	vector<vector<Mat> > buildDogPyr(vector<vector<Mat> > gauss_pyr);
-	void computeOrientationHist(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypoints);
 	void getScaleSpaceExtrema(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypoints);
-	vector<vector<double> > computeDescriptors();
+	void computeOrientationHist(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypoints);
 	void drawKeyPoints(Mat& image, vector<KeyPoint>& keypoints);
+
+	vector<vector<Mat> > buildDogPyr(vector<vector<Mat> > gauss_pyr);
+	vector<vector<double> > computeDescriptors();
 };
 
 #endif
