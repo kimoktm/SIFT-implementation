@@ -31,8 +31,6 @@ using namespace cv;
 class SIFT
 {
 private:
-
-
 	vector<Mat> keypointsGradients;
 	vector<Mat> keypointsMagnitudes;
 
@@ -58,10 +56,7 @@ private:
 	/** Build a gradient histogram from the given window and range **/
 	vector<double> buildHistogram(Mat matrix, int range, int maximum);
 
-
 public:
-
-
 	/** Finds the SIFT keypoints in a given image **/
 	void findSiftInterestPoint(Mat& image, vector<KeyPoint>& keypoints,
 			int nOctaves = SIFT_OCTVES, int nIntervals = SIFT_INTVLS);
@@ -85,8 +80,6 @@ public:
 	
 	/** Compute the SIFT descriptor of each keypoints **/
 	vector<vector<double> > computeDescriptors();
-
-
 };
 
 #endif
