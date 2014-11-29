@@ -49,10 +49,6 @@ private:
 	/** Tests if the given point is an extrema by comparing it to it's surroundings **/ 	
 	bool isExtrema(vector<vector<Mat> >& dog_pyr, int octave, int interval, int r, int c);
 
-	/** Tests if the given point is a good feature **/ 	
-	bool cleanPoints(Point position, Mat& image, int curv_thr = SIFT_CURV_THR,
-			float cont_thr = SIFT_CONTR_THR, float dtr_thr = SIFT_DETER_THR);
-
 	/** Build a gradient histogram from the given window and range **/
 	vector<double> buildHistogram(Mat matrix, int range, int maximum);
 
@@ -63,7 +59,11 @@ public:
 
 	/** Build Scale Space guassian pyramid from an image **/
 	void buildGaussianPyramid(Mat& image, vector<vector<Mat> >& pyr, 
-		int nOctaves, int nIntervals);
+		int nOctaves = SIFT_OCTVES, int nIntervals = SIFT_INTVLS);
+
+	/** Tests if the given point is a good feature **/
+	bool cleanPoints(Point position, Mat& image, int curv_thr = SIFT_CURV_THR,
+			float cont_thr = SIFT_CONTR_THR, float dtr_thr = SIFT_DETER_THR);
 
 	/** Gets the extremas from the DOG pyramid **/
 	void getScaleSpaceExtrema(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypoints,

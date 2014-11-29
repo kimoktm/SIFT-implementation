@@ -74,7 +74,6 @@ vector<vector<Mat> > SIFT::buildDogPyr(vector<vector<Mat> > gauss_pyr)
 {
 	int nOctaves = gauss_pyr.size();
 	int nIntervals = gauss_pyr[0].size();
-	cout << nIntervals << endl;
 	vector<vector<Mat> > dog_pyr;
 
 	for (int i = 0; i < nOctaves; i++)
@@ -91,6 +90,8 @@ vector<vector<Mat> > SIFT::buildDogPyr(vector<vector<Mat> > gauss_pyr)
 
 	return dog_pyr;
 }
+
+
 
 /**
  * Tests if the given point is an extrema by comparing
@@ -215,7 +216,7 @@ bool SIFT::cleanPoints(Point position, Mat& image, int curv_thr, float cont_thr,
  * @param secondmax		The Second maximum value
  * @param indexSecond	The index of second maximum
  *
- * @return	maximum, indexMax, secondmax, indexSecond
+ * @return	maximum, indexMax
  */
 void SIFT::histogramMax(vector<double> histogram, int &maximum, int &indexMax)
 {
@@ -289,41 +290,39 @@ void SIFT::computeOrientationHist(vector<vector<Mat> >& dog_pyr, vector<KeyPoint
 		int keyx = keypoints[z].pt.x;
 		int keyy = keypoints[z].pt.y;
 
-		if (keyx - SIFT_HIST_BOREDER - 1 < 0 || keyx + SIFT_HIST_BOREDER + 1 > image.cols
-				|| keyy - SIFT_HIST_BOREDER - 1 < 0 || keyy + SIFT_HIST_BOREDER + 1 > image.rows)
+		if (!(keyx - SIFT_HIST_BOREDER - 1 < 0 || keyx + SIFT_HIST_BOREDER + 1 > image.cols
+				|| keyy - SIFT_HIST_BOREDER - 1 < 0 || keyy + SIFT_HIST_BOREDER + 1 > image.rows))
 		{
-			return;
-		}
-
-		Mat tempMagnitude = (Mat_<float>(SIFT_HIST_BOREDER * 2, SIFT_HIST_BOREDER * 2));
-		Mat tempGradient = (Mat_<float>(SIFT_HIST_BOREDER * 2, SIFT_HIST_BOREDER * 2));
-		for (int i = 0; i < SIFT_HIST_BOREDER * 2; i++)
-		{
-			for (int j = 0; j < SIFT_HIST_BOREDER * 2; j++)
+			Mat tempMagnitude = (Mat_<float>(SIFT_HIST_BOREDER * 2, SIFT_HIST_BOREDER * 2));
+			Mat tempGradient = (Mat_<float>(SIFT_HIST_BOREDER * 2, SIFT_HIST_BOREDER * 2));
+			for (int i = 0; i < SIFT_HIST_BOREDER * 2; i++)
 			{
-				float diffx, diffy, magnitude, gradient;
+				for (int j = 0; j < SIFT_HIST_BOREDER * 2; j++)
+				{
+					float diffx, diffy, magnitude, gradient;
 
-				diffx = image.at<float>(keyx + i + 1 - SIFT_HIST_BOREDER, keyy - SIFT_HIST_BOREDER + j)
-						- image.at<float>(keyx + i - 1 - SIFT_HIST_BOREDER, keyy - SIFT_HIST_BOREDER + j);
-				diffy = image.at<float>(keyx - SIFT_HIST_BOREDER + i, keyy + j + 1 - SIFT_HIST_BOREDER)
-						- image.at<float>(keyx - SIFT_HIST_BOREDER + i, keyy + j - 1 - SIFT_HIST_BOREDER);
-				magnitude = sqrt(pow(diffx, 2) + pow(diffy, 2));
-				gradient = rad2deg(atan2f(diffy, diffx));
-				tempMagnitude.at<float>(i, j) = magnitude;
-				tempGradient.at<float>(i, j) = gradient;
+					diffx = image.at<float>(keyx + i + 1 - SIFT_HIST_BOREDER, keyy - SIFT_HIST_BOREDER + j)
+							- image.at<float>(keyx + i - 1 - SIFT_HIST_BOREDER, keyy - SIFT_HIST_BOREDER + j);
+					diffy = image.at<float>(keyx - SIFT_HIST_BOREDER + i, keyy + j + 1 - SIFT_HIST_BOREDER)
+							- image.at<float>(keyx - SIFT_HIST_BOREDER + i, keyy + j - 1 - SIFT_HIST_BOREDER);
+					magnitude = sqrt(pow(diffx, 2) + pow(diffy, 2));
+					gradient = rad2deg(atan2f(diffy, diffx));
+					tempMagnitude.at<float>(i, j) = magnitude;
+					tempGradient.at<float>(i, j) = gradient;
+				}
 			}
+
+			keypointsGradients.push_back(tempGradient);
+			keypointsMagnitudes.push_back(tempMagnitude);
+			int maxima, indexMax;
+
+			vector<double> histo = buildHistogram(tempGradient, range, maximum);
+			histogramMax(histo, maxima, indexMax);
+
+			int angleOrientation = indexMax * range;
+			angleOrientation = angleOrientation + (range / 2);
+			keypoints[z].angle = angleOrientation;
 		}
-
-		keypointsGradients.push_back(tempGradient);
-		keypointsMagnitudes.push_back(tempMagnitude);
-		int maxima, indexMax;
-
-		vector<double> histo = buildHistogram(tempGradient, range, maximum);
-		histogramMax(histo, maxima, indexMax);
-
-		int angleOrientation = indexMax * range;
-		angleOrientation = angleOrientation + (range / 2);
-		keypoints[z].angle = angleOrientation;
 	}
 }
 
@@ -460,4 +459,3 @@ Mat SIFT::downSample(Mat& image)
 
 	return resizedImage;
 }
-
