@@ -1,5 +1,17 @@
 #include "SIFT.h"
 
+/**
+ * Finds the SIFT keypoints in
+ * a given image
+ *
+ * @param image		The target image
+ * @param keypoints	Keypoints vector
+ * @param nOctaves	Number of Octaves
+ * @param nIntervals Number of Octaves
+ *
+ *
+ * @return gauss_pyr
+ */
 void SIFT::findSiftInterestPoint(Mat& image, vector<KeyPoint>& keypoints, int nOctaves, int nIntervals)
 {
 	Mat _image;
@@ -13,14 +25,16 @@ void SIFT::findSiftInterestPoint(Mat& image, vector<KeyPoint>& keypoints, int nO
 	computeOrientationHist(dog_pyr, keypoints);
 }
 
+
+
 /**
  * Build Scale Space guassian pyramid from an image
  *
- * @param image		The base image of the pyramid
- * @param nOctaves	Number of Octaves
- * @param gauss_pyr	Guassian scale space pyramid
+ * @param image			The base image of the pyramid
+ * @param nOctaves		Number of Octaves
+ * @param nIntervals	Number of Intervals
  *
- * @return gauss_pyr
+ * @return Updates the keypoints with SIFT feautres
  */
 void SIFT::buildGaussianPyramid(Mat& image, vector<vector<Mat> >& gauss_pyr, int nOctaves, int nIntervals)
 {
@@ -45,6 +59,8 @@ void SIFT::buildGaussianPyramid(Mat& image, vector<vector<Mat> >& gauss_pyr, int
 		tempImage = downSample(tempImage);
 	}
 }
+
+
 
 /**
  * Build difference of guassians Scale Space guassian
@@ -110,6 +126,8 @@ bool SIFT::isExtrema(vector<vector<Mat> >& dog_pyr, int octave, int interval, in
 	return true;
 }
 
+
+
 /**
  * Tests if the given point is an extrema by comparing
  * it to it's surroundings, bottom and top intervals
@@ -140,6 +158,8 @@ void SIFT::getScaleSpaceExtrema(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>&
 		}
 	}
 }
+
+
 
 /**
  * Tests if the given point is a good feature or
@@ -181,6 +201,8 @@ bool SIFT::cleanPoints(Point position, Mat& image, int curv_thr, float cont_thr,
 	return true;
 }
 
+
+
 /**
  * Gets the first and second maximums
  * in a given histogram
@@ -207,6 +229,8 @@ void SIFT::histogramMax(vector<double> histogram, int &maximum, int &indexMax)
 		}
 	}
 }
+
+
 
 /**
  * Build a gradient histogram from
@@ -239,6 +263,8 @@ vector<double> SIFT::buildHistogram(Mat matrix, int range, int maximum)
 
 	return histo;
 }
+
+
 
 /**
  * Compute the Orientation histogram
@@ -299,6 +325,8 @@ void SIFT::computeOrientationHist(vector<vector<Mat> >& dog_pyr, vector<KeyPoint
 	}
 }
 
+
+
 /**
  * Compute the SIFT descriptor of
  * each keypoints
@@ -340,6 +368,8 @@ vector<vector<double> > SIFT::computeDescriptors()
 	return descriptors;
 }
 
+
+
 /**
  * Draws the given keypoints
  * on the given image
@@ -365,6 +395,8 @@ void SIFT::drawKeyPoints(Mat& image, vector<KeyPoint>& keypoints)
 	}
 }
 
+
+
 /**
  * Convert a given angle
  * from radians to degrees
@@ -382,6 +414,8 @@ double SIFT::rad2deg(float rad)
 	return rad;
 }
 
+
+
 /**
  * Convert a given angle
  * from degrees to radians
@@ -394,6 +428,8 @@ double SIFT::deg2rad(float deg)
 {
 	return deg * PI / 180.0f;
 }
+
+
 
 /**
  * Downsamples an image to quarter its size
