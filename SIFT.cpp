@@ -73,13 +73,15 @@ void SIFT::buildGaussianPyramid(Mat& image, vector<vector<Mat> >& gauss_pyr, int
 vector<vector<Mat> > SIFT::buildDogPyr(vector<vector<Mat> > gauss_pyr)
 {
 	int nOctaves = gauss_pyr.size();
+	int nIntervals = gauss_pyr[0].size();
+	cout << nIntervals << endl;
 	vector<vector<Mat> > dog_pyr;
 
 	for (int i = 0; i < nOctaves; i++)
 	{
 		vector<Mat> dog_intervals;
 
-		for (int j = 0; j < SIFT_INTVLS + 2; j++)
+		for (int j = 0; j < nIntervals - 1; j++)
 		{
 			dog_intervals.push_back(gauss_pyr[i][j] - gauss_pyr[i][j + 1]);
 		}
@@ -129,15 +131,15 @@ bool SIFT::isExtrema(vector<vector<Mat> >& dog_pyr, int octave, int interval, in
 
 
 /**
- * Tests if the given point is an extrema by comparing
- * it to it's surroundings, bottom and top intervals
+ * Gets the extremas from the
+ * DOG pyramid
  *
  * @param dog_pyr		Difference of Guassians pyramid
  * @param keypoints		Keypoints vector
  *
  * @return list of keypoints
  */
-void SIFT::getScaleSpaceExtrema(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypoints)
+void SIFT::getScaleSpaceExtrema(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>& keypoints, int curv_thr)
 {
 	int octaves = dog_pyr.size();
 	int intervals = dog_pyr[0].size() - 2;
@@ -151,7 +153,7 @@ void SIFT::getScaleSpaceExtrema(vector<vector<Mat> >& dog_pyr, vector<KeyPoint>&
 				for (int c = SIFT_IMG_BORDER; c < dog_pyr[i][0].cols - SIFT_IMG_BORDER; c++)
 				{
 					if (isExtrema(dog_pyr, i, j, r, c))
-						if (cleanPoints(Point(c, r), dog_pyr[i][j], SIFT_CURV_THR))
+						if (cleanPoints(Point(c, r), dog_pyr[i][j], curv_thr))
 							keypoints.push_back(KeyPoint(c, r, j, -1, 0, i));
 				}
 			}
@@ -192,7 +194,7 @@ bool SIFT::cleanPoints(Point position, Mat& image, int curv_thr, float cont_thr,
 		deter = (fxx * fyy) - (fxy * fxy);
 		curvature = trace * trace / deter;
 
-		if (deter < SIFT_DETER_THR || curvature > curv_thr)
+		if (deter < dtr_thr || curvature > curv_thr)
 		{
 			return false;
 		}
@@ -204,7 +206,7 @@ bool SIFT::cleanPoints(Point position, Mat& image, int curv_thr, float cont_thr,
 
 
 /**
- * Gets the first and second maximums
+ * Gets the first and its index
  * in a given histogram
  *
  * @param histogram		The given histogram
